@@ -1858,6 +1858,23 @@ const App: React.FC = () => {
                     setLastHistoryId2(historyId);
                     setUndoTimer2(120);
                 }
+                
+                if (dbMode === 'cloud') {
+                    showToast('Mengunggah file ke Firebase (Upload Kembar)...');
+                    saveUploadTesToFirebase({
+                        excelFile: activeExcel2,
+                        pdfFiles: pdfFiles2,
+                        resultPdfBase64: data.pdf_base64,
+                        packingListContent: data.packing_list || null,
+                        stats: data.stats,
+                        pickerName: pickerName.trim(),
+                        tenantId: user?.tenant_id || user?.username || 'unknown'
+                    }).then(success => {
+                        if (success) console.log('[FIREBASE] Upload Kembar success');
+                        else console.error('[FIREBASE] Upload Kembar failed');
+                    });
+                }
+                
                 setStatus2(ProcessStatus.COMPLETED);
                 setProcessStats2(data.stats);
             } else {
@@ -3496,7 +3513,7 @@ const App: React.FC = () => {
 
                         {/* Nav links */}
                         <div className="flex items-center gap-2 xl:gap-4 flex-wrap">
-                            {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'developer')).map(menuId => {
+                            {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')).map(menuId => {
                                 const def = MENU_DEFINITIONS[menuId];
                                 const isActive = activeMenu === menuId;
                                 return (
@@ -3619,7 +3636,7 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'developer')).map(menuId => {
+                                {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')).map(menuId => {
                                     const def = MENU_DEFINITIONS[menuId];
                                     const Icon = def.icon || FiLayout; // fallback icon
 
