@@ -90,8 +90,10 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                   { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
                 { id: 'dataManager', label: 'Kelola Data History', icon: FiTrash2 },
                 { id: 'toolkitAccess', label: 'Kontrol Akses Toolkit', icon: FiLock },
-                { id: 'menuSettings', label: 'Pengaturan Menu', icon: FiLayout },
-                { id: 'systemUpdate', label: 'Manajemen Update Sistem', icon: FiUploadCloud }
+                ...(user?.role === 'developer' ? [
+                    { id: 'menuSettings', label: 'Pengaturan Menu', icon: FiLayout },
+                    { id: 'systemUpdate', label: 'Manajemen Update Sistem', icon: FiUploadCloud }
+                ] : [])
             ]
         },
         (devMode && user?.role === 'developer') ? {
@@ -323,7 +325,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                 {/* Main Content Area */}
                 <div className="flex-1 min-w-0 w-full bg-white border-2 border-slate-200/90 rounded-3xl shadow-lg p-4 md:p-6 min-h-[600px]">
                     <div className={activeView === 'database' ? 'block' : 'hidden'}>
-                        <AdminSkuDatabase showToast={showToast} />
+                        <AdminSkuDatabase showToast={showToast} user={user} />
                     </div>
                     <div className={activeView === 'grouping' ? 'block' : 'hidden'}>
                         <AdminSkuGrouping showToast={showToast} />

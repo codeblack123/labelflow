@@ -15,6 +15,12 @@ interface User {
     parent_account?: string;
     department?: string;
     status?: string;
+    assigned_warehouses?: string[];
+}
+
+interface Warehouse {
+    id: string;
+    name: string;
 }
 
 interface AdminUserManagerProps {
@@ -36,6 +42,13 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
     const [fullName, setFullName] = useState('');
     const [role, setRole] = useState('staff');
 
+    // Warehouse Access State
+    const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+    const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
+    const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([]);
+    const [isSavingWarehouses, setIsSavingWarehouses] = useState(false);
+
     useEffect(() => {
         fetchUsers();
 
@@ -44,6 +57,9 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'auth_users' }, () => {
                 fetchUsers(); // Refresh when anyone goes online/offline or is updated
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, () => {
+                fetchWarehouses();
+            })
             .subscribe();
 
         return () => {
@@ -51,9 +67,20 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
         };
     }, []);
 
+    const fetchWarehouses = async () => {
+        try {
+            const { data, error } = await supabase.from('warehouses').select('*').order('name');
+            if (error) throw error;
+            setWarehouses(data || []);
+        } catch (error) {
+            console.error('Error fetching warehouses:', error);
+        }
+    };
+
     const fetchUsers = async () => {
         try {
             setLoading(true);
+            await fetchWarehouses();
             const { data, error } = await supabase
                 .from('auth_users')
                 .select('*')
@@ -210,6 +237,83 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
         setPassword('');
         setFullName('');
         setRole('staff');
+    };
+
+    const toggleUserSelection = (id: string, role: string) => {
+        if (role === 'staff') return;
+        setSelectedUsers(prev => 
+            prev.includes(id) ? prev.filter(uId => uId !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedUsers(filteredUsers.filter(u => u.role !== 'staff').map(u => u.id));
+        } else {
+            setSelectedUsers([]);
+        }
+    };
+
+    const openWarehouseModal = () => {
+        if (selectedUsers.length === 0) return;
+        
+        // If only 1 user is selected, pre-fill their existing assigned_warehouses
+        if (selectedUsers.length === 1) {
+            const singleUser = users.find(u => u.id === selectedUsers[0]);
+            if (singleUser?.assigned_warehouses) {
+                setSelectedWarehouses(singleUser.assigned_warehouses);
+            } else {
+                setSelectedWarehouses([]);
+            }
+        } else {
+            // For multiple users, start with empty selection (or we could show intersection)
+            setSelectedWarehouses([]);
+        }
+        setIsWarehouseModalOpen(true);
+    };
+
+    const toggleWarehouseSelection = (warehouseId: string) => {
+        setSelectedWarehouses(prev => 
+            prev.includes(warehouseId) ? prev.filter(wId => wId !== warehouseId) : [...prev, warehouseId]
+        );
+    };
+
+    const saveWarehouseAccess = async () => {
+        setIsSavingWarehouses(true);
+        try {
+            // Update assigned_warehouses array for all selected user IDs
+            // Supabase postgrest allows filtering by "in"
+            // Ensure we use the proper column type logic. If assigned_warehouses is UUID[], we send an array.
+            
+            // Note: Since supabase.js doesn't easily let us update multiple rows with `in` filter 
+            // if we are passing an array, let's do it safely.
+            const updates = [];
+            for (const userId of selectedUsers) {
+                updates.push(supabase.from('auth_users').update({ assigned_warehouses: selectedWarehouses }).eq('id', userId));
+                
+                // For main accounts, automatically apply same warehouse access to all their sub-staff
+                const userObj = users.find(u => u.id === userId);
+                if (userObj && userObj.role === 'main') {
+                    updates.push(
+                        supabase.from('auth_users')
+                        .update({ assigned_warehouses: selectedWarehouses })
+                        .eq('parent_account', userObj.username)
+                    );
+                }
+            }
+            
+            await Promise.all(updates);
+            
+            showToast?.(`✅ Akses gudang berhasil diperbarui untuk ${selectedUsers.length} user`);
+            setIsWarehouseModalOpen(false);
+            setSelectedUsers([]);
+            fetchUsers();
+        } catch (error: any) {
+            console.error('Error saving warehouse access:', error);
+            showToast?.(`❌ Gagal menyimpan: ${error.message}`);
+        } finally {
+            setIsSavingWarehouses(false);
+        }
     };
 
     return (
@@ -377,6 +481,22 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                 </div>
             </div>
 
+            {/* Bulk Actions */}
+            {selectedUsers.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                    <span className="text-sm font-medium text-blue-800">
+                        {selectedUsers.length} user terpilih
+                    </span>
+                    <button
+                        onClick={openWarehouseModal}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 shadow-sm"
+                    >
+                        <FiShield className="w-4 h-4" />
+                        Atur Akses Gudang
+                    </button>
+                </div>
+            )}
+
             {/* User List Table */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {loading ? (
@@ -390,9 +510,19 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-semibold">
                             <tr>
+                                <th className="p-4 w-12 text-center">
+                                    <input 
+                                        type="checkbox" 
+                                        className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                        checked={filteredUsers.filter(u => u.role !== 'staff').length > 0 && selectedUsers.length === filteredUsers.filter(u => u.role !== 'staff').length}
+                                        onChange={handleSelectAll}
+                                        title="Pilih Semua (kecuali sub-staf)"
+                                    />
+                                </th>
                                 <th className="p-4">User Info</th>
                                 <th className="p-4">Username</th>
                                 <th className="p-4">Role</th>
+                                <th className="p-4">Gudang</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4 text-right">Aksi</th>
                             </tr>
@@ -400,6 +530,20 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                         <tbody className="divide-y divide-gray-100">
                             {filteredUsers.map(user => (
                                 <tr key={user.id} className="hover:bg-gray-50/50">
+                                    <td className="p-4 text-center">
+                                        {user.role !== 'staff' ? (
+                                            <input 
+                                                type="checkbox"
+                                                className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                checked={selectedUsers.includes(user.id)}
+                                                onChange={() => toggleUserSelection(user.id, user.role)}
+                                            />
+                                        ) : (
+                                            <div className="w-4 h-4 border border-gray-200 rounded bg-gray-50 flex items-center justify-center cursor-not-allowed mx-auto" title="Akses gudang mengikuti akun utama">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="p-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs uppercase">
@@ -429,6 +573,27 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                                             }`}>
                                             {user.role === 'main' ? 'MAIN ACCOUNT' : user.role}
                                         </span>
+                                    </td>
+                                    <td className="p-4">
+                                        {user.role === 'staff' && (
+                                            <div className="text-[10px] text-indigo-500 mb-1 font-semibold italic flex items-center gap-1">
+                                                <span>↳ Mengikuti {user.parent_account}</span>
+                                            </div>
+                                        )}
+                                        {user.assigned_warehouses && user.assigned_warehouses.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {user.assigned_warehouses.map(wId => {
+                                                    const w = warehouses.find(wh => wh.id === wId);
+                                                    return w ? (
+                                                        <span key={wId} className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] rounded border border-gray-200">
+                                                            {w.name}
+                                                        </span>
+                                                    ) : null;
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <span className="text-[10px] text-gray-400 italic">Belum ada</span>
+                                        )}
                                     </td>
                                     <td className="p-4">
                                         {(() => {
@@ -517,6 +682,63 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                                     {loading ? 'Menghapus...' : 'Ya, Hapus'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Warehouse Assignment Modal */}
+            {isWarehouseModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl transform transition-all scale-100">
+                        <div className="flex justify-between items-center p-5 border-b border-gray-100">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Atur Akses Gudang</h3>
+                                <p className="text-xs text-slate-500 mt-1">Untuk {selectedUsers.length} user terpilih</p>
+                            </div>
+                            <button onClick={() => setIsWarehouseModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors">
+                                <FiX className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 max-h-[60vh] overflow-y-auto">
+                            {warehouses.length === 0 ? (
+                                <div className="text-center py-6 text-gray-500">
+                                    <p className="mb-2">Belum ada data gudang.</p>
+                                    <p className="text-sm">Silakan buat gudang baru di menu Database SKU.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="text-sm font-medium text-gray-700 mb-2">Pilih gudang yang dapat diakses:</div>
+                                    {warehouses.map(wh => (
+                                        <label key={wh.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500"
+                                                checked={selectedWarehouses.includes(wh.id)}
+                                                onChange={() => toggleWarehouseSelection(wh.id)}
+                                            />
+                                            <span className="font-medium text-gray-800">{wh.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setIsWarehouseModalOpen(false)}
+                                className="px-5 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl transition-colors"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={saveWarehouseAccess}
+                                disabled={isSavingWarehouses}
+                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center min-w-[120px]"
+                            >
+                                {isSavingWarehouses ? 'Menyimpan...' : 'Simpan Akses'}
+                            </button>
                         </div>
                     </div>
                 </div>

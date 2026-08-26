@@ -84,6 +84,7 @@ class SkuMappingItem(BaseModel):
     id: str
     sku: str
     rak: str = ""
+    gudang_id: str = None
 
 async def supabase_fetch(method: str, endpoint: str, data=None, params=None, headers=None):
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -131,17 +132,24 @@ async def supabase_fetch(method: str, endpoint: str, data=None, params=None, hea
             print(f"Internal Fetch Error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = None, order_by: str = "custom_id", order_dir: str = "asc", is_multi_search: bool = False):
+async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = None, order_by: str = "custom_id", order_dir: str = "asc", is_multi_search: bool = False, gudang_id: str = None):
     # Helper to fetch SKU mappings (Internal Use)
     # If limit is None, fetches ALL data (handling 1000 row limit of Supabase)
     
     try:
+        # SAFETY: Jika gudang_id tidak dikirim, return kosong untuk mencegah kebocoran data antar gudang
+        if not gudang_id:
+            print("[WARN] fetch_sku_mappings called without gudang_id, returning empty")
+            return []
+        
         # Validasi order_by untuk keamanan (menghindari SQL injection via URL)
         safe_cols = ["custom_id", "sku", "rak"]
         if order_by not in safe_cols:
             order_by = "custom_id"
             
         def apply_search(p: dict):
+            # WAJIB filter per gudang — tidak boleh tanpa gudang_id
+            p["gudang_id"] = f"eq.{gudang_id}"
             if not search: return
             if is_multi_search:
                 import re
@@ -159,7 +167,7 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
             current_offset = 0
             while True:
                 params = {
-                    "select": "custom_id,sku,rak",
+                    "select": "custom_id,sku,rak,gudang_id",
                     "limit": chunk_size,
                     "offset": current_offset,
                     "order": f"{order_by}.{order_dir}"
@@ -180,7 +188,7 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
         else:
             # Fetch Paginated
             params = {
-                "select": "custom_id,sku,rak",
+                "select": "custom_id,sku,rak,gudang_id",
                 "limit": limit,
                 "offset": offset,
                 "order": f"{order_by}.{order_dir}"
@@ -191,7 +199,7 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
             data = await supabase_fetch("GET", "sku_mappings", params=params)
             if not isinstance(data, list):
                 return []
-            return [{"id": item["custom_id"], "sku": item["sku"], "rak": item.get("rak", "")} for item in data]
+            return [{"id": item["custom_id"], "sku": item["sku"], "rak": item.get("rak", ""), "gudang_id": item.get("gudang_id")} for item in data]
             
     except Exception as e:
         print(f"Fetch SKU Error: {e}")
@@ -246,8 +254,11 @@ async def get_sku_mappings_paginated(
     search: str = "", 
     order_by: str = "custom_id", 
     order_dir: str = "asc",
-    is_multi_search: str = "false"
+    is_multi_search: str = "false",
+    gudang_id: str = None
 ):
+    if not gudang_id:
+        return {"data": [], "page": page, "limit": limit}
     offset = (page - 1) * limit
     data = await fetch_sku_mappings(
         limit=limit, 
@@ -255,7 +266,8 @@ async def get_sku_mappings_paginated(
         search=search if search else None,
         order_by=order_by,
         order_dir=order_dir,
-        is_multi_search=(is_multi_search.lower() == 'true')
+        is_multi_search=(is_multi_search.lower() == 'true'),
+        gudang_id=gudang_id
     )
     
     print(f"[DEBUG] Paginated SKU: Page {page}, Limit {limit}, Search {search}, Order {order_by} {order_dir} -> Found {len(data)} rows")
@@ -269,8 +281,11 @@ async def get_sku_mappings_paginated(
 async def add_sku_mapping(item: SkuMappingItem):
     # Optimization: Check specific ID and SKU instead of fetching all 10k+ rows
     try:
-        # 1. Check if ID exists
-        check_id = await supabase_fetch("GET", f"sku_mappings?custom_id=eq.{urllib.parse.quote(item.id)}")
+        if not item.gudang_id:
+            raise HTTPException(status_code=400, detail="gudang_id wajib disertakan")
+        
+        # 1. Check if ID exists IN THE SAME WAREHOUSE
+        check_id = await supabase_fetch("GET", f"sku_mappings?custom_id=eq.{urllib.parse.quote(item.id)}&gudang_id=eq.{item.gudang_id}")
         if check_id and isinstance(check_id, list) and len(check_id) > 0:
             existing = check_id[0]
             if existing['sku'] == item.sku:
@@ -278,8 +293,8 @@ async def add_sku_mapping(item: SkuMappingItem):
             else:
                  raise HTTPException(status_code=400, detail=f"Konflik: ID '{item.id}' sudah digunakan oleh SKU '{existing['sku']}'")
         
-        # 2. Check if SKU exists
-        check_sku = await supabase_fetch("GET", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}")
+        # 2. Check if SKU exists IN THE SAME WAREHOUSE
+        check_sku = await supabase_fetch("GET", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}&gudang_id=eq.{item.gudang_id}")
         if check_sku and isinstance(check_sku, list) and len(check_sku) > 0:
              existing = check_sku[0]
              raise HTTPException(status_code=400, detail=f"Konflik: SKU '{item.sku}' sudah digunakan oleh ID '{existing['custom_id']}'")
@@ -288,13 +303,15 @@ async def add_sku_mapping(item: SkuMappingItem):
         await supabase_fetch("POST", "sku_mappings", data={
             "custom_id": item.id, 
             "sku": item.sku, 
-            "rak": item.rak if item.rak else ""
+            "rak": item.rak if item.rak else "",
+            "gudang_id": item.gudang_id
         })
         return {"success": True}
     except HTTPException:
         raise
     except Exception as e:
         print(f"[ERROR] Add Mapping Failed: {e}")
+        import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan: {str(e)}")
 
@@ -304,7 +321,8 @@ async def update_sku_mapping(id: str, item: SkuMappingItem):
         decoded_id = urllib.parse.unquote(id)
         
         # 1. Check if SKU exists and belongs to a DIFFERENT ID
-        check_sku = await supabase_fetch("GET", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}")
+        gid_filter = f"&gudang_id=eq.{item.gudang_id}" if item.gudang_id else ""
+        check_sku = await supabase_fetch("GET", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}{gid_filter}")
         if check_sku and isinstance(check_sku, list) and len(check_sku) > 0:
             for existing in check_sku:
                 if existing['custom_id'] != decoded_id:
@@ -320,7 +338,8 @@ async def update_sku_mapping(id: str, item: SkuMappingItem):
         await supabase_fetch("PATCH", f"sku_mappings?custom_id=eq.{urllib.parse.quote(decoded_id)}", data={
             "custom_id": item.id,
             "sku": item.sku,
-            "rak": item.rak if item.rak else ""
+            "rak": item.rak if item.rak else "",
+            "gudang_id": item.gudang_id
         })
         return {"success": True}
     except HTTPException:
@@ -332,27 +351,27 @@ async def update_sku_mapping(id: str, item: SkuMappingItem):
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan: {str(e)}")
 
 @app.delete("/settings/sku-mappings/all")
-async def delete_all_sku_mappings():
+async def delete_all_sku_mappings(gudang_id: str):
     try:
-        print("[Admin] Nuclear Delete All: Deleting all rows directly...")
+        if not gudang_id:
+            raise HTTPException(status_code=400, detail="gudang_id harus disertakan untuk mencegah penghapusan seluruh data")
+            
+        print(f"[Admin] Nuclear Delete All (gudang: {gudang_id}): Deleting rows directly...")
         # Cara paling efisien: DELETE dengan filter 'neq' yang selalu true
         # Ini menghapus SEMUA baris tanpa perlu fetch ID dulu (tidak ada limit 1000)
+        params = {
+            "custom_id": "neq.________NEVER_MATCH________",
+            "gudang_id": f"eq.{gudang_id}"
+        }
+            
         await supabase_fetch("DELETE", "sku_mappings",
-            params={"custom_id": "neq.________NEVER_MATCH________"},
+            params=params,
             headers={"Prefer": "return=minimal"}
         )
         # Backup: jika filter params tidak bekerja, coba cara alternatif
         print("[Admin] Nuclear Delete completed.")
         return {"success": True}
-    except Exception as e:
-        print(f"[Admin] Delete All Error: {e}")
-        # Fallback: endpoint style lama jika yang baru gagal
-        try:
-            await supabase_fetch("DELETE", "sku_mappings?custom_id=neq.________EMPTY_DUMMY________")
-            return {"success": True}
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=f"Gagal mengosongkan database: {str(e2)}")
-
+        
     except Exception as e:
         print(f"[Admin] Full Delete Error: {e}")
         raise HTTPException(status_code=500, detail=f"Gagal mengosongkan database: {str(e)}")
@@ -1608,8 +1627,11 @@ async def verify_labels(
         raise HTTPException(status_code=500, detail=f"Gagal memverifikasi label: {str(e)}")
 
 @app.post("/settings/import-sku")
-async def import_sku_mappings(file: UploadFile = File(...)):
+async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = Form(...)):
     try:
+        if not gudang_id:
+            raise HTTPException(status_code=400, detail="gudang_id wajib disertakan saat import data")
+            
         content = await file.read()
         # Use dtype=str to preserve "0001", keep_default_na=False to avoid NaN for empty strings
         df = pd.read_excel(io.BytesIO(content), dtype=str, keep_default_na=False)
@@ -1686,16 +1708,17 @@ async def import_sku_mappings(file: UploadFile = File(...)):
             to_import.append({
                 "custom_id": final_id, 
                 "sku": raw_sku, 
-                "rak": raw_rak
+                "rak": raw_rak,
+                "gudang_id": gudang_id
             })
             seen_skus.add(raw_sku)
             
         print(f"[IMPORT] Summary -> Total rows: {len(df)}, Valid/Unik SKU: {len(to_import)}, Duplikat SKU: {duplicate_count}, Baris kosong: {empty_count}") 
 
-        # 2. Hapus semua data lama (tanpa limit)
+        # 2. Hapus semua data lama (sesuai gudang_id)
         try:
             print("[IMPORT] Clearing existing database...")
-            await delete_all_sku_mappings()
+            await delete_all_sku_mappings(gudang_id)
             print("[IMPORT] Database cleared.")
         except Exception as e:
             print(f"[IMPORT] Warning: Clear failed but continuing insertion: {e}")
@@ -1720,9 +1743,10 @@ async def import_sku_mappings(file: UploadFile = File(...)):
                     print(f"[IMPORT] Batch {batch_num}/{total_batches} OK ({inserted}/{len(to_import)})")
                 except Exception as batch_e:
                     print(f"[IMPORT] Batch {batch_num} FAILED: {batch_e}")
-                    # Lanjut batch berikutnya, jangan stop
+                    if inserted == 0 and len(to_import) > 0:
+                        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {str(batch_e)}")
                 
-        return {"success": True, "count": len(to_import)}
+        return {"success": True, "count": inserted}
         
     except HTTPException as he:
         raise he

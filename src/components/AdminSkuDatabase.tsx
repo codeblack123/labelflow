@@ -4,18 +4,26 @@ import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { API_CONFIG } from '../constants';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
+import { supabase } from '../supabaseClient';
 
 interface SkuMapping {
     id: string;
     sku: string;
     rak?: string;
+    gudang_id?: string;
+}
+
+interface Warehouse {
+    id: string;
+    name: string;
 }
 
 interface AdminSkuDatabaseProps {
     showToast?: (message: string) => void;
+    user?: any;
 }
 
-const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
+const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) => {
     // SKU Manager State
     const [mappings, setMappings] = useState<SkuMapping[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -66,10 +74,46 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
+    // Warehouse State
+    const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+    const [activeWarehouseId, setActiveWarehouseId] = useState<string | null>(null);
+
+    // Fetch Warehouses
+    useEffect(() => {
+        const fetchWarehouses = async () => {
+            const { data, error } = await supabase.from('warehouses').select('*').order('name');
+            if (!error && data) {
+                // Filter based on user access
+                let accessibleWarehouses = data;
+                if (user?.role !== 'developer' && user?.assigned_warehouses) {
+                    accessibleWarehouses = data.filter(w => user.assigned_warehouses.includes(w.id));
+                }
+                
+                setWarehouses(accessibleWarehouses);
+                if (accessibleWarehouses.length > 0 && !activeWarehouseId) {
+                    setActiveWarehouseId(accessibleWarehouses[0].id);
+                }
+            }
+        };
+        fetchWarehouses();
+
+        const channel = supabase.channel('admin-sku-warehouses')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, () => {
+                fetchWarehouses();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user]);
+
     // Initial Load
     useEffect(() => {
-        fetchMappings();
-    }, [page, limit, sortConfig]); // Re-fetch on any change
+        if (activeWarehouseId) {
+            fetchMappings();
+        }
+    }, [page, limit, sortConfig, activeWarehouseId]); // Re-fetch on any change
 
     // Search Debounce
     useEffect(() => {
@@ -91,7 +135,8 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
                     search: searchTerm,
                     order_by: sortConfig.key,
                     order_dir: sortConfig.direction,
-                    is_multi_search: isMultiSearch
+                    is_multi_search: isMultiSearch,
+                    gudang_id: activeWarehouseId || undefined
                 }
             });
             setMappings(res.data.data || []);
@@ -105,10 +150,15 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
     };
 
     const handleAdd = async () => {
-        if (!newId || !newSku) return;
+        if (!newId || !newSku || !activeWarehouseId) return;
         setIsSaving(true);
         try {
-            await axios.post(`${API_CONFIG.BASE_URL}/settings/sku-mappings`, { id: newId, sku: newSku, rak: newRak });
+            await axios.post(`${API_CONFIG.BASE_URL}/settings/sku-mappings`, { 
+                id: newId, 
+                sku: newSku, 
+                rak: newRak,
+                gudang_id: activeWarehouseId
+            });
             setNewId('');
             setNewSku('');
             setNewRak('');
@@ -133,8 +183,10 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
                 if (showToast) showToast(`✓ ${selectedIds.length} data berhasil dihapus`);
                 setSelectedIds([]);
             } else if (deleteConfig.type === 'all') {
-                await axios.delete(`${API_CONFIG.BASE_URL}/settings/sku-mappings/all`);
-                if (showToast) showToast('✓ Seluruh data dikosongkan');
+                await axios.delete(`${API_CONFIG.BASE_URL}/settings/sku-mappings/all`, {
+                    params: { gudang_id: activeWarehouseId }
+                });
+                if (showToast) showToast('✓ Seluruh data gudang ini dikosongkan');
                 setPage(1);
             }
             fetchMappings();
@@ -161,7 +213,8 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
             await axios.put(`${API_CONFIG.BASE_URL}/settings/sku-mappings/${encodeURIComponent(editingMapping)}`, {
                 id: editId,
                 sku: editSku,
-                rak: editRak
+                rak: editRak,
+                gudang_id: activeWarehouseId
             });
             if (showToast) showToast('✓ Data berhasil diubah');
             setEditingMapping(null);
@@ -232,12 +285,17 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
 
     const handleImport = async () => {
         if (!importFile) return;
+        if (!activeWarehouseId) {
+            setImportStatus({ type: 'error', message: 'Pilih gudang terlebih dahulu sebelum import.' });
+            return;
+        }
         setIsImporting(true);
         setImportStatus(null);
         setUploadProgress(0);
 
         const formData = new FormData();
         formData.append('file', importFile);
+        formData.append('gudang_id', activeWarehouseId);
 
         const timer = setInterval(() => {
             setUploadProgress(prev => {
@@ -304,10 +362,55 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
         XLSX.writeFile(wb, "Template_Import_SKU_Database.xlsx");
     };
 
+    const handleCreateWarehouse = async () => {
+        const name = prompt("Masukkan nama gudang baru:");
+        if (name && name.trim()) {
+            try {
+                const { error } = await supabase.from('warehouses').insert([{ name: name.trim() }]);
+                if (error) {
+                    if (error.code === '23505') alert('Nama gudang sudah ada!');
+                    else throw error;
+                } else {
+                    if (showToast) showToast('✓ Gudang berhasil ditambahkan');
+                }
+            } catch (err: any) {
+                alert(`Gagal menambah gudang: ${err.message}`);
+            }
+        }
+    };
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
-            {/* Left Column forms */}
-            <div className="lg:col-span-4 space-y-6">
+        <div className="animate-in fade-in duration-300">
+            {/* Warehouse Tabs */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-end sm:items-center mb-6">
+                <div className="flex items-center gap-2 overflow-x-auto w-full pb-2 scrollbar-hide">
+                    {warehouses.map(w => (
+                        <button
+                            key={w.id}
+                            onClick={() => { setActiveWarehouseId(w.id); setPage(1); }}
+                            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap shadow-sm border ${
+                                activeWarehouseId === w.id 
+                                ? 'bg-blue-600 text-white border-blue-700' 
+                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                            {w.name}
+                        </button>
+                    ))}
+                    {(user?.role === 'developer' || user?.role === 'admin') && (
+                        <button
+                            onClick={handleCreateWarehouse}
+                            className="px-4 py-2.5 bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors whitespace-nowrap ml-2 shadow-sm"
+                        >
+                            <FiPlus className="w-4 h-4" /> Gudang
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left Column forms */}
+                <div className="lg:col-span-4 space-y-6">
                 {/* Add New Card */}
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                     <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2 text-sm uppercase tracking-wider border-b border-gray-100 pb-2">
@@ -346,7 +449,7 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
                         </div>
                         <button
                             onClick={handleAdd}
-                            disabled={!newId || !newSku || isSaving}
+                            disabled={!newId || !newSku || !activeWarehouseId || isSaving}
                             className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-blue-100 disabled:text-blue-300 transition-colors text-sm shadow-sm flex items-center justify-center gap-2"
                         >
                             {isSaving ? 'Menyimpan...' : 'Simpan Data'}
@@ -783,6 +886,8 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast }) => {
                 </div>
             </div>
 
+            </div>
+            
             <DeleteConfirmationModal
                 isOpen={deleteConfig.isOpen}
                 onClose={() => setDeleteConfig(prev => ({ ...prev, isOpen: false }))}
