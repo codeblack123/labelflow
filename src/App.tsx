@@ -2631,7 +2631,8 @@ const App: React.FC = () => {
                         resultPdfBase64: response.data.pdf_base64,
                         packingListContent: response.data.packing_list || null,
                         stats: stats,
-                        pickerName: pickerName.trim()
+                        pickerName: pickerName.trim(),
+                        tenantId: user?.tenant_id || user?.username || 'unknown'
                     }).then((success) => {
                         if (success) console.log('[FIREBASE] Upload Massal Label success');
                         else console.error('[FIREBASE] Upload Massal Label failed');
@@ -2973,7 +2974,8 @@ const App: React.FC = () => {
                         resultPdfBase64: data.pdf_base64,
                         packingListContent: data.packing_list || null,
                         stats: data.stats,
-                        pickerName: pickerName.trim()
+                        pickerName: pickerName.trim(),
+                        tenantId: user?.tenant_id || user?.username || 'unknown'
                     }).then(success => {
                         if (success) console.log('[FIREBASE] Upload Label success');
                         else console.error('[FIREBASE] Upload Label failed');
