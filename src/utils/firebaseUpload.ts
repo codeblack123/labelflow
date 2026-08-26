@@ -51,7 +51,7 @@ export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
         const docRef = await addDoc(metadataRef, {
             created_at: serverTimestamp(),
             picker_name: data.pickerName,
-            excel_filename: data.excelFile.name,
+            excel_filename: data.stats?.excel_filename || data.excelFile.name,
             pdf_filenames: data.pdfFiles.map(f => f.name),
             excel_url: excelUrl,
             original_pdf_urls: pdfUrls,

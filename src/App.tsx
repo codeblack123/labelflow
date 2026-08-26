@@ -3473,7 +3473,7 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Desktop Navigation - Hidden on mobile */}
-                    <nav className="hidden lg:flex items-center gap-5 flex-nowrap justify-end">
+                    <nav className="hidden lg:flex items-center gap-3 xl:gap-5 flex-wrap justify-end">
                         {/* DB Mode Toggle (Desktop) */}
                         <div
                             className="flex items-center gap-1 p-1 rounded-xl bg-[#131b2e] border border-slate-800 cursor-pointer select-none mr-2 flex-shrink-0"
@@ -3493,7 +3493,7 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Nav links */}
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 xl:gap-4 flex-wrap">
                             {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId]).map(menuId => {
                                 const def = MENU_DEFINITIONS[menuId];
                                 const isActive = activeMenu === menuId;
@@ -3930,7 +3930,7 @@ const App: React.FC = () => {
                     <div className="space-y-6">
                         {/* Page Header */}
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 xl:gap-4 flex-wrap">
                                 <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100/60 flex-shrink-0 shadow-sm">
                                     <FiUploadCloud className="w-7 h-7 text-blue-600" />
                                 </div>

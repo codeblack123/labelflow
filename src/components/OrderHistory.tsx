@@ -595,7 +595,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">{formatDate(selectedRecord.created_at)}</p>
 
-                    <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="bg-slate-50 rounded-md p-3">
                             <p className="text-xs text-slate-400 mb-1">Excel</p>
                             <p className="text-xs font-medium text-slate-700 truncate">{selectedRecord.excel_filename}</p>
@@ -613,7 +613,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                     </div>
 
                     {/* Download Buttons */}
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2 w-full">
                         <button
                             onClick={() => handleDownload('excel', selectedRecord)}
                             className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium hover:bg-emerald-100 transition-colors border border-emerald-100"
@@ -790,7 +790,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                 {/* Stats Summary */}
                 <div className="bg-slate-50 rounded-lg p-4 mb-6">
                     <p className="text-xs text-slate-500 mb-3">Hasil Perbandingan</p>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="bg-white rounded-md p-3 shadow-sm">
                             <div className="text-xl font-semibold text-emerald-600">{selectedRecord.matched_count}</div>
                             <div className="text-xs text-slate-500">Match</div>
