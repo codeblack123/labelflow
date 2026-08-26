@@ -3324,17 +3324,42 @@ const App: React.FC = () => {
                             </div>
                         </div>
                         <div className="p-6 border-t border-slate-200 bg-white flex flex-col gap-3 flex-shrink-0">
-                            <a
-                                href={systemUpdate.download_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-4 px-4 rounded-xl flex justify-center items-center gap-2 transition-all shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:-translate-y-0.5"
-                            >
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                1. Download Script Update
-                            </a>
+                            {(() => {
+                                const links = (systemUpdate.download_link || '').split('|||');
+                                const linkMain = links[0];
+                                const linkBat = links.length > 1 ? links[1] : '';
+                                
+                                return (
+                                    <div className="flex flex-col gap-2">
+                                        {linkBat && (
+                                            <a
+                                                href={linkBat}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-extrabold py-3.5 px-4 rounded-xl flex justify-center items-center gap-2 transition-all shadow-md hover:-translate-y-0.5 text-sm"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                Langkah 1: Download update_backend.bat
+                                            </a>
+                                        )}
+                                        {linkMain && (
+                                            <a
+                                                href={linkMain}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-4 px-4 rounded-xl flex justify-center items-center gap-2 transition-all shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:-translate-y-0.5"
+                                            >
+                                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                </svg>
+                                                Langkah 2: Download File main.py
+                                            </a>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                             <button
                                 onClick={() => {
                                     localStorage.setItem('acknowledged_version', systemUpdate.version_code);

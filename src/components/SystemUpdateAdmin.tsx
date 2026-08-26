@@ -6,6 +6,7 @@ export const SystemUpdateAdmin: React.FC = () => {
     const [title, setTitle] = useState('');
     const [instructions, setInstructions] = useState('');
     const [downloadLink, setDownloadLink] = useState('');
+    const [downloadLinkBat, setDownloadLinkBat] = useState('');
     const [isActive, setIsActive] = useState(false);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -17,7 +18,16 @@ export const SystemUpdateAdmin: React.FC = () => {
                 setVersionCode(data.version_code || '');
                 setTitle(data.title || '');
                 setInstructions(data.instructions || '');
-                setDownloadLink(data.download_link || '');
+                
+                // Parse split links
+                const links = (data.download_link || '').split('|||');
+                setDownloadLink(links[0] || '');
+                if (links.length > 1) {
+                    setDownloadLinkBat(links[1]);
+                } else {
+                    setDownloadLinkBat('');
+                }
+                
                 setIsActive(data.is_active || false);
             }
         };
@@ -35,7 +45,7 @@ export const SystemUpdateAdmin: React.FC = () => {
                 version_code: versionCode,
                 title,
                 instructions,
-                download_link: downloadLink,
+                download_link: `${downloadLink}|||${downloadLinkBat}`,
                 is_active: activeStatus,
                 updated_at: new Date().toISOString()
             };
@@ -96,9 +106,15 @@ export const SystemUpdateAdmin: React.FC = () => {
                     </div>
                 </div>
                 
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Link Download (Google Drive)</label>
-                    <input type="url" value={downloadLink} onChange={e => setDownloadLink(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="https://drive.google.com/..." />
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">1. Link Script update_backend.bat</label>
+                        <input type="url" value={downloadLinkBat} onChange={e => setDownloadLinkBat(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="https://drive.google.com/..." />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">2. Link File main.py</label>
+                        <input type="url" value={downloadLink} onChange={e => setDownloadLink(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="https://drive.google.com/..." />
+                    </div>
                 </div>
 
                 <div>

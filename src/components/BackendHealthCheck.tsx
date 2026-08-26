@@ -11,10 +11,21 @@ const BackendHealthCheck: React.FC = () => {
         const checkBackend = async () => {
             try {
                 // Ping the root endpoint to check if backend is running
-                await axios.get(API_CONFIG.BASE_URL + '/', { timeout: 3000 });
+                await axios.get(API_CONFIG.BASE_URL + '/', { timeout: 15000 });
                 setIsBackendAlive(true);
-            } catch (error) {
-                setIsBackendAlive(false);
+            } catch (error: any) {
+                // If it's a timeout (ECONNABORTED), the backend is likely just busy processing a large PDF, so we don't mark it dead.
+                // We only mark it dead if it's a connection refused or network error.
+                if (error.code === 'ECONNABORTED') {
+                    // Backend is busy, but still alive
+                    setIsBackendAlive(true);
+                } else if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+                    // Backend is actually not running (connection refused)
+                    setIsBackendAlive(false);
+                } else {
+                    // Other errors (e.g. 500 server error) mean the server is at least reachable
+                    setIsBackendAlive(true);
+                }
             } finally {
                 setIsChecking(false);
             }
