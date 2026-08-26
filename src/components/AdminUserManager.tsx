@@ -12,6 +12,9 @@ interface User {
     last_seen?: string;
     is_online?: boolean;
     force_logout?: boolean;
+    parent_account?: string;
+    department?: string;
+    status?: string;
 }
 
 interface AdminUserManagerProps {
@@ -23,6 +26,9 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [searchUser, setSearchUser] = useState('');
+    const [filterRole, setFilterRole] = useState('all');
+    const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
     // Form State
     const [username, setUsername] = useState('');
@@ -51,10 +57,19 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
             const { data, error } = await supabase
                 .from('auth_users')
                 .select('*')
+                .order('role', { ascending: true })
+                .order('parent_account', { ascending: true })
                 .order('username', { ascending: true });
 
             if (error) throw error;
-            setUsers(data || []);
+            
+            // Custom sort to ensure developer -> main -> staff
+            const sortedData = (data || []).sort((a, b) => {
+                const roleOrder: any = { developer: 1, main: 2, staff: 3 };
+                return (roleOrder[a.role] || 4) - (roleOrder[b.role] || 4);
+            });
+            
+            setUsers(sortedData);
         } catch (error) {
             console.error('Error fetching users:', error);
             showToast?.('Gagal memuat data user');
@@ -62,6 +77,13 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
             setLoading(false);
         }
     };
+
+    const filteredUsers = users.filter(u => {
+        const matchesSearch = u.username.toLowerCase().includes(searchUser.toLowerCase()) || 
+                              (u.full_name && u.full_name.toLowerCase().includes(searchUser.toLowerCase()));
+        const matchesRole = filterRole === 'all' || u.role === filterRole;
+        return matchesSearch && matchesRole;
+    });
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -88,6 +110,21 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                     .select();
 
                 if (error) throw error;
+                
+                // Cascade update parent_account for staff if username changed
+                if (editingUser.username !== updateData.username) {
+                    await supabase
+                        .from('auth_users')
+                        .update({ parent_account: updateData.username })
+                        .eq('parent_account', editingUser.username);
+                        
+                    // Cascade update tenant_id in history
+                    await supabase
+                        .from('label_process_history')
+                        .update({ tenant_id: updateData.username })
+                        .eq('tenant_id', editingUser.username);
+                }
+
                 console.log('[UserManager] Update success:', data);
                 showToast?.('✅ User berhasil diperbarui');
             } else {
@@ -294,6 +331,52 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                 </div>
             )}
 
+            {/* Filter & Search Toolbar */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                <div className="flex-1 relative">
+                    <input 
+                        type="text" 
+                        placeholder="Cari username atau nama..." 
+                        value={searchUser}
+                        onChange={(e) => setSearchUser(e.target.value)}
+                        className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    />
+                    <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    {searchUser && (
+                        <button 
+                            onClick={() => setSearchUser('')}
+                            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                            <FiX className="w-5 h-5" />
+                        </button>
+                    )}
+                </div>
+                <div className="sm:w-48 flex gap-2">
+                    <select 
+                        value={filterRole}
+                        onChange={(e) => setFilterRole(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none appearance-none bg-white transition-all cursor-pointer flex-1"
+                    >
+                        <option value="all">Semua Tipe Akun</option>
+                        <option value="main">Main Account (Utama)</option>
+                        <option value="staff">Staff (Sub-Akun)</option>
+                        <option value="developer">Developer</option>
+                    </select>
+                    <button
+                        onClick={() => {
+                            setSearchUser('');
+                            setFilterRole('all');
+                        }}
+                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors border border-gray-200"
+                        title="Reset Filter & Pencarian"
+                    >
+                        Reset
+                    </button>
+                </div>
+            </div>
+
             {/* User List Table */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {loading ? (
@@ -301,7 +384,7 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                 ) : users.length === 0 ? (
                     <div className="p-12 text-center text-gray-500 flex flex-col items-center">
                         <FiUser className="w-10 h-10 text-gray-300 mb-3" />
-                        <p>Belum ada user terdaftar</p>
+                        <p>{searchUser || filterRole !== 'all' ? 'Tidak ada user yang cocok dengan pencarian' : 'Belum ada user terdaftar'}</p>
                     </div>
                 ) : (
                     <table className="w-full text-left border-collapse">
@@ -315,7 +398,7 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {users.map(user => (
+                            {filteredUsers.map(user => (
                                 <tr key={user.id} className="hover:bg-gray-50/50">
                                     <td className="p-4">
                                         <div className="flex items-center gap-3">
@@ -328,17 +411,23 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-sm font-medium text-gray-700">
-                                        {user.username}
+                                    <td className="p-4">
+                                        <div className="text-sm font-medium text-gray-700">{user.username}</div>
+                                        {user.role === 'staff' && user.parent_account && (
+                                            <div className="text-[10px] font-semibold text-slate-400 mt-1 flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                                                Sub-akun dari: <span className="text-indigo-500">{user.parent_account}</span>
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold border uppercase ${user.role === 'admin'
-                                            ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                            : user.role === 'manager'
-                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold border uppercase ${user.role === 'main'
+                                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                            : user.role === 'developer'
+                                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                : 'bg-orange-50 text-orange-700 border-orange-200'
                                             }`}>
-                                            {user.role}
+                                            {user.role === 'main' ? 'MAIN ACCOUNT' : user.role}
                                         </span>
                                     </td>
                                     <td className="p-4">
@@ -400,6 +489,38 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
                     </table>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {userToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all scale-100">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <FiTrash2 className="w-8 h-8 text-rose-500" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">Hapus Akun?</h3>
+                            <p className="text-sm text-slate-500 mb-6">
+                                Anda yakin ingin menghapus akun <span className="font-bold text-slate-700">{userToDelete.username}</span>? Data yang terhapus tidak dapat dikembalikan.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button
+                                    onClick={() => setUserToDelete(null)}
+                                    className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition-colors"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={loading}
+                                    className="flex-1 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center"
+                                >
+                                    {loading ? 'Menghapus...' : 'Ya, Hapus'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -9,6 +9,7 @@ export interface FirebaseUploadData {
     packingListContent: string | null;
     stats: any;
     pickerName: string;
+    tenantId: string;
 }
 
 export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
@@ -51,6 +52,7 @@ export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
         const docRef = await addDoc(metadataRef, {
             created_at: serverTimestamp(),
             picker_name: data.pickerName,
+            tenant_id: data.tenantId,
             excel_filename: data.stats?.excel_filename || data.excelFile.name,
             pdf_filenames: data.pdfFiles.map(f => f.name),
             excel_url: excelUrl,

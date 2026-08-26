@@ -263,6 +263,10 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
 
                         let constraints: any[] = [orderBy('created_at', 'desc')];
 
+                        // Filter by tenant_id (Data Isolation)
+                        const tenantId = user?.tenant_id || user?.username || 'unknown';
+                        constraints.push(where('tenant_id', '==', tenantId));
+
                         // Date filter (WIB UTC+7)
                         if (selectedDate) {
                             const [yyyy, mm, dd] = selectedDate.split('-').map(Number);

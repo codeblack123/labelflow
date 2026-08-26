@@ -24,7 +24,6 @@ const ALL_FEATURES: { key: string; label: string; desc: string; color: string }[
     { key: 'extract-pesanan', label: 'Extract Pesanan', desc: 'Ambil nomor pesanan dari data Ginee', color: 'indigo' },
     { key: 'wms-cleaner', label: 'Pembersih ID Paket', desc: 'Hapus karakter @ dari No. Pesanan', color: 'orange' },
     { key: 'ginee-processor', label: 'Ginee Data Processor', desc: 'Extract ID Pesanan dari Excel Ginee', color: 'blue' },
-    { key: 'orderan-kilat', label: 'Orderan Kilat (VIP >10K)', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan VIP >10K', color: 'orange' },
     { key: 'orderan-kilat-50k', label: 'Orderan Kilat (VIP >50K)', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan VIP >50K', color: 'rose' },
     { key: 'packing-list-upload-2', label: 'Sertakan Halaman Packing List (Barcode Akhir)', desc: 'Mengaktifkan pencetakan halaman barcode ekstra di belakang PDF (Berlaku Global)', color: 'teal' },
     { key: 'custom-label-priority-top', label: 'Prioritas Atas Custom Label', desc: 'Aktifkan fitur urutan atas untuk BOX/SLOP di dalam label resi', color: 'rose' },

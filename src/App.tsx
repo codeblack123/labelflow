@@ -218,7 +218,8 @@ const App: React.FC = () => {
 
     const handleLogin = (userData: any) => {
         const today = new Date().toLocaleDateString('sv-SE');
-        const sessionData = { ...userData, loginDate: today, theme: userData.theme || 'Biru Tua' };
+        const tenant_id = userData.role === 'staff' ? userData.parent_account : userData.username;
+        const sessionData = { ...userData, tenant_id, loginDate: today, theme: userData.theme || 'Biru Tua' };
         setUser(sessionData);
         localStorage.setItem('user_session', JSON.stringify(sessionData));
         setViewState('app');
@@ -1120,6 +1121,7 @@ const App: React.FC = () => {
             unmatched_pdf_awbs: stats.unmatched_pdf_awbs || [],
             all_excel_awbs: stats.all_excel_awbs || [],
             id_pesanan_to_awb: stats.id_to_awb_mapping || {},
+            tenant_id: user?.tenant_id || user?.username,
             username: user?.username || 'unknown',
             created_at: new Date().toISOString()
         };
@@ -2605,7 +2607,7 @@ const App: React.FC = () => {
 
                 // FIREBASE UPLOAD: Save to Firebase for Upload Massal Tes
                 if (activeMenu === 'bulkUploadTes' && dbMode === 'cloud') {
-                    showToast('Mengunggah file ke Firebase (Upload Massal Tes)...');
+                    showToast('Mengunggah file ke Firebase (Upload Massal Label)...');
                     saveUploadTesToFirebase({
                         excelFile: activeBulkTestExcel,
                         pdfFiles: bulkTestPdfFiles,
@@ -2614,8 +2616,8 @@ const App: React.FC = () => {
                         stats: stats,
                         pickerName: pickerName.trim()
                     }).then((success) => {
-                        if (success) console.log('[FIREBASE] Upload Massal Tes success');
-                        else console.error('[FIREBASE] Upload Massal Tes failed');
+                        if (success) console.log('[FIREBASE] Upload Massal Label success');
+                        else console.error('[FIREBASE] Upload Massal Label failed');
                     });
                 }
 
@@ -2956,8 +2958,8 @@ const App: React.FC = () => {
                         stats: data.stats,
                         pickerName: pickerName.trim()
                     }).then(success => {
-                        if (success) console.log('[FIREBASE] Upload Tes success');
-                        else console.error('[FIREBASE] Upload Tes failed');
+                        if (success) console.log('[FIREBASE] Upload Label success');
+                        else console.error('[FIREBASE] Upload Label failed');
                     });
                 }
 
@@ -3494,7 +3496,7 @@ const App: React.FC = () => {
 
                         {/* Nav links */}
                         <div className="flex items-center gap-2 xl:gap-4 flex-wrap">
-                            {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId]).map(menuId => {
+                            {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'developer')).map(menuId => {
                                 const def = MENU_DEFINITIONS[menuId];
                                 const isActive = activeMenu === menuId;
                                 return (
@@ -3617,7 +3619,7 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId]).map(menuId => {
+                                {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'developer')).map(menuId => {
                                     const def = MENU_DEFINITIONS[menuId];
                                     const Icon = def.icon || FiLayout; // fallback icon
 
@@ -4374,14 +4376,14 @@ const App: React.FC = () => {
                                     <div>
                                         <div className="flex items-center gap-3">
                                             <h2 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-                                                {activeMenu === 'uploadTestMsku' ? 'Upload Tes (+ Total MSKU)' : 'Upload Tes'}
+                                                {activeMenu === 'uploadTestMsku' ? 'Upload Label (+ Total MSKU)' : 'Upload Label'}
                                             </h2>
                                             <span className="bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[11px] font-bold px-2.5 py-0.5 rounded-full backdrop-blur-sm">
                                                 Versi 2.4
                                             </span>
                                         </div>
                                         <p className="text-xs lg:text-sm font-medium text-slate-300 mt-1">
-                                            {activeMenu === 'uploadTestMsku' ? 'Upload Tes dengan ekstra halaman rekap Total MSKU' : 'Halaman uji coba sistem (cloned from Upload 2)'}
+                                            {activeMenu === 'uploadTestMsku' ? 'Upload Label dengan ekstra halaman rekap Total MSKU' : 'Halaman uji coba sistem (cloned from Upload 2)'}
                                         </p>
                                     </div>
                                 </div>
@@ -6260,7 +6262,7 @@ const App: React.FC = () => {
                                     <div>
                                         <div className="flex items-center gap-3">
                                             <h2 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
-                                                {activeMenu === 'bulkUploadTestMsku' ? 'Upload Massal 2 (+ Total MSKU)' : activeMenu === 'bulkUploadTes' ? 'Upload Massal Tes' : 'Upload Massal 2'}
+                                                {activeMenu === 'bulkUploadTestMsku' ? 'Upload Massal 2 (+ Total MSKU)' : activeMenu === 'bulkUploadTes' ? 'Upload Massal Label' : 'Upload Massal 2'}
                                             </h2>
                                             <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[11px] font-bold px-2.5 py-0.5 rounded-full backdrop-blur-sm">
                                                 Batch Processing
@@ -7244,11 +7246,11 @@ const MENU_DEFINITIONS: Record<string, { label: string; icon?: any }> = {
     dashboard: { label: 'Dasbor', icon: FiActivity },
     upload: { label: 'Upload' },
     upload2: { label: 'Upload 2' },
-    uploadTest: { label: 'Upload Tes' },
+    uploadTest: { label: 'Upload Label' },
     history: { label: 'Riwayat' },
     bulkUpload: { label: 'Upload Massal' },
     bulkUploadTest: { label: 'Upload Massal 2' },
-    bulkUploadTes: { label: 'Upload Massal Tes' },
+    bulkUploadTes: { label: 'Upload Massal Label' },
     bulkUploadPro: { label: 'Massal Pro' },
     uploadFlex: { label: 'Upload Flex' },
     toolkit: { label: 'Toolkit' },

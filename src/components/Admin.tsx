@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FiSettings, FiLock, FiUnlock, FiX, FiDatabase, FiLayers, FiTrendingDown, FiTrash2, FiBell, FiUser, FiPackage, FiLayout, FiMessageSquare, FiTerminal, FiWifi, FiCheckCircle, FiUploadCloud } from 'react-icons/fi';
+import React, { useState, useEffect, useRef } from 'react';
+import { FiSettings, FiLock, FiUnlock, FiX, FiDatabase, FiLayers, FiTrendingDown, FiTrash2, FiBell, FiUser, FiUsers, FiPackage, FiLayout, FiMessageSquare, FiTerminal, FiWifi, FiCheckCircle, FiUploadCloud } from 'react-icons/fi';
 import axios from 'axios';
 import { API_CONFIG } from '../constants';
 import { supabase } from '../supabaseClient';
@@ -24,6 +24,7 @@ import SqlEditor from './SqlEditor';
 import AdminNetworkDiagnostics from './AdminNetworkDiagnostics';
 import AdminTableCleaner from './AdminTableCleaner';
 import AdminFeatureAudit from './AdminFeatureAudit';
+import AdminStaffManager from './AdminStaffManager';
 interface AdminProps {
     showToast?: (message: string) => void;
     user?: { role: string; username: string } | null;
@@ -40,31 +41,31 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
 
     // Dev Mode Logic
     const [devMode, setDevMode] = useState(() => localStorage.getItem('global_devmode') === 'true');
-    const [devBuffer, setDevBuffer] = useState('');
+    const devBufferRef = useRef('');
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            const newBuffer = (devBuffer + e.key).slice(-20); // Keep last 20 chars
-            setDevBuffer(newBuffer);
+            const newBuffer = (devBufferRef.current + e.key).slice(-20); // Keep last 20 chars
+            devBufferRef.current = newBuffer;
             if (newBuffer.toLowerCase().endsWith('devmode')) {
                 // Only allow developers to toggle devmode
                 if (user?.role === 'developer') {
                     const newState = !devMode;
                     setDevMode(newState);
                     localStorage.setItem('global_devmode', newState.toString());
-                    showToast && showToast(newState ? '🛠️ Dev Mode: Fitur Pengembang Aktif' : '🔒 Dev Mode: Fitur Pengembang Nonaktif');
-                    setDevBuffer('');
+                    showToast && showToast(newState ? '🚀 Dev Mode: Fitur Pengembang Aktif' : '🔒 Dev Mode: Fitur Pengembang Nonaktif');
+                    devBufferRef.current = '';
                     // Trigger global sync for App.tsx if they share same storage
                     window.dispatchEvent(new Event('storage'));
                 } else {
-                    showToast && showToast('⚠️ Akses ditolak. Mode ini hanya untuk Developer.');
-                    setDevBuffer('');
+                    showToast && showToast('❌ Akses ditolak. Mode ini hanya untuk Developer.');
+                    devBufferRef.current = '';
                 }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [devBuffer, user, devMode]);
+    }, [user, devMode]);
 
     // Menu Categories
     const categories = [
@@ -79,14 +80,14 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                 { id: 'formatting', label: 'Format Packing List', icon: FiSettings },
                 { id: 'labelSettings', label: 'Format Label', icon: FiLayout },
                 { id: 'barangKhusus', label: 'Data Barang Khusus', icon: FiDatabase },
-                { id: 'skuVip', label: 'SKU VIP (>10K)', icon: FiDatabase },
                 { id: 'skuVip50k', label: 'SKU VIP (>50K)', icon: FiDatabase },
             ]
         },
         {
             title: 'Manajemen Data',
             items: [
-                { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
+                { id: 'staffManager', label: 'Manajemen Staf', icon: FiUsers },
+                  { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
                 { id: 'dataManager', label: 'Kelola Data History', icon: FiTrash2 },
                 { id: 'toolkitAccess', label: 'Kontrol Akses Toolkit', icon: FiLock },
                 { id: 'menuSettings', label: 'Pengaturan Menu', icon: FiLayout },
@@ -275,7 +276,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
 
                     <button
                         onClick={handleLogout}
-                        className="bg-rose-500/20 hover:bg-rose-600 border border-rose-400/30 text-rose-200 hover:text-white text-xs font-extrabold px-4.5 py-2.5 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer self-start md:self-center"
+                        className="bg-rose-500/20 hover:bg-rose-600 border border-rose-400/30 text-rose-200 hover:text-white text-xs font-extrabold px-5 py-2.5 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer self-start md:self-center"
                     >
                         <FiUnlock className="w-4 h-4" />
                         <span>Keluar Admin</span>
@@ -291,7 +292,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
 
             <div className="flex flex-col lg:flex-row gap-6 items-start">
                 {/* Sidebar Navigation */}
-                <div className="w-full lg:w-72 flex flex-col gap-4 lg:sticky lg:top-24">
+                <div className="w-full lg:w-72 flex flex-col gap-4 lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto custom-scrollbar">
                     {categories.map((category, catIdx) => (
                         <div key={catIdx} className="bg-white rounded-3xl border-2 border-slate-200/90 shadow-lg p-3 flex flex-col gap-1.5">
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 my-1">
@@ -362,6 +363,9 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                     </div>
                     <div className={activeView === 'skuVip50k' ? 'block' : 'hidden'}>
                         <AdminSkuVip50k showToast={showToast} />
+                    </div>
+                    <div className={activeView === 'staffManager' ? 'block' : 'hidden'}>
+                        <AdminStaffManager showToast={showToast} user={user} />
                     </div>
                     <div className={activeView === 'featureAudit' ? 'block' : 'hidden'}>
                         <AdminFeatureAudit showToast={showToast} />

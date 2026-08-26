@@ -34,7 +34,6 @@ const TOOL_ITEMS = [
     { id: 'ginee-processor', title: 'Ginee Data Processor', desc: 'Extract ID Pesanan dari file Excel Ginee (pretelan vs satuan).', icon: FiTable, colorType: 'blue', type: 'default' },
     { id: 'verify', title: 'Verify Labels', badgeText: 'New', badgeType: 'pill', badgeColor: 'bg-teal-500', desc: 'Double check dan sinkronisasi antara PDF Asli, Custom, dan data Excel.', icon: FiCheckSquare, colorType: 'teal', type: 'default', isNew: true },
     { id: 'packing-list', title: 'Packing List Excel', badgeText: 'New', badgeType: 'pill', badgeColor: 'bg-green-500', desc: 'Upload file Excel (Packing List) untuk melihat daftar list secara rapi dan cepat.', icon: FiTable, colorType: 'teal', type: 'default', isNew: true },
-    { id: 'orderan-kilat', title: 'Orderan Kilat', badgeText: '(VIP >10K)', badgeColor: 'text-orange-600', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan yang mengandung MSKU berharga tinggi (VIP).', icon: FiFileText, colorType: 'orange', type: 'vip' },
     { id: 'orderan-kilat-50k', title: 'Orderan Kilat', badgeText: '(VIP >50K)', badgeColor: 'text-rose-600', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan yang mengandung MSKU berharga tinggi (VIP >50K).', icon: FiFileText, colorType: 'rose', type: 'vip' },
     { id: 'pdf-merger', title: 'Gabung Label Asli', badgeText: 'Baru', badgeType: 'pill', badgeColor: 'bg-blue-500', desc: 'Gabungkan 2 atau lebih file PDF resi asli menjadi satu file PDF utuh.', icon: FiLayers, colorType: 'blue', type: 'default', isNew: true }
 ];
