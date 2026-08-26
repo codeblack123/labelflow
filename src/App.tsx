@@ -475,6 +475,14 @@ const App: React.FC = () => {
     const [includeSummary, setIncludeSummary] = useState(false);
     const [isCustomPriorityTop, setIsCustomPriorityTop] = useState(false);
     const [isProductivityTimerActive, setIsProductivityTimerActive] = useState(true);
+
+
+
+
+    // --- System Update Notification State ---
+    const [systemUpdate, setSystemUpdate] = useState<any>(null);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
+
     const [processStats2, setProcessStats2] = useState<ProcessStats | null>(null);
     const [duplicateData2, setDuplicateData2] = useState<{ count: number; items: any[] } | null>(null);
     const [isLocked2, setIsLocked2] = useState(false);
@@ -3249,8 +3257,101 @@ const App: React.FC = () => {
         return <LoginPage onLogin={handleLogin} onBack={() => setViewState('landing')} />;
     }
 
+
+    // --- Check System Update on Mount ---
+    useEffect(() => {
+        const checkSystemUpdate = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_updates')
+                    .select('*')
+                    .eq('is_active', true)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                
+                if (data && !error) {
+                    const ackVersion = localStorage.getItem('acknowledged_version');
+                    if (ackVersion !== data.version_code) {
+                        setSystemUpdate(data);
+                        setShowUpdateModal(true);
+                    } else {
+                        // If current update is already acknowledged, make sure modal is closed
+                        setShowUpdateModal(false);
+                    }
+                } else {
+                    // No active updates
+                    setShowUpdateModal(false);
+                }
+            } catch (err) {
+                console.error("Gagal mengecek update", err);
+            }
+        };
+        checkSystemUpdate();
+        
+        // Also check periodically every 15 seconds
+        const intervalId = setInterval(checkSystemUpdate, 15000);
+        return () => clearInterval(intervalId);
+    }, []);
+
     return (
         <div className="min-h-screen bg-[#f4f7fe]">
+
+            {/* SYSTEM UPDATE MODAL (Z-INDEX TERTINGGI, UN-CLICKABLE BACKDROP) */}
+            {showUpdateModal && systemUpdate && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4" style={{ pointerEvents: 'auto' }}>
+                    <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-300 pointer-events-auto">
+                        <div className="bg-gradient-to-r from-red-600 to-orange-600 p-8 flex-shrink-0 relative">
+                            <div className="absolute top-0 right-0 p-4">
+                                <span className="bg-white/20 text-white text-xs font-black px-3 py-1.5 rounded-xl backdrop-blur-md border border-white/30 shadow-sm">
+                                    {systemUpdate.version_code}
+                                </span>
+                            </div>
+                            <h2 className="text-3xl font-black text-white pr-16 leading-tight">{systemUpdate.title}</h2>
+                            <p className="text-red-100 mt-2 text-sm font-medium flex items-center gap-1.5">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                PEMBARUAN SISTEM WAJIB!
+                            </p>
+                        </div>
+                        <div className="p-6 md:p-8 flex-1 overflow-y-auto bg-slate-50">
+                            <div className="prose prose-sm prose-slate max-w-none">
+                                <p className="font-bold text-slate-800 mb-3 text-base">Harap ikuti instruksi berikut sebelum Anda dapat melanjutkan:</p>
+                                <div className="bg-white border-2 border-red-100 rounded-2xl p-5 text-slate-700 whitespace-pre-line text-sm leading-relaxed shadow-sm font-medium">
+                                    {systemUpdate.instructions}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-slate-200 bg-white flex flex-col gap-3 flex-shrink-0">
+                            <a
+                                href={systemUpdate.download_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-4 px-4 rounded-xl flex justify-center items-center gap-2 transition-all shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:-translate-y-0.5"
+                            >
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                1. Download Script Update
+                            </a>
+                            <button
+                                onClick={() => {
+                                    localStorage.setItem('acknowledged_version', systemUpdate.version_code);
+                                    setShowUpdateModal(false);
+                                }}
+                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-4 px-4 rounded-xl flex justify-center items-center gap-2 transition-colors mt-2"
+                            >
+                                <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                2. Saya sudah menjalankan Update (Tutup Pesan Ini)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Global Notifications */}
             <GlobalNotificationModal />
 

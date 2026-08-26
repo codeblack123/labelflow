@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiSettings, FiLock, FiUnlock, FiX, FiDatabase, FiLayers, FiTrendingDown, FiTrash2, FiBell, FiUser, FiPackage, FiLayout, FiMessageSquare, FiTerminal, FiWifi, FiCheckCircle } from 'react-icons/fi';
+import { FiSettings, FiLock, FiUnlock, FiX, FiDatabase, FiLayers, FiTrendingDown, FiTrash2, FiBell, FiUser, FiPackage, FiLayout, FiMessageSquare, FiTerminal, FiWifi, FiCheckCircle, FiUploadCloud } from 'react-icons/fi';
 import axios from 'axios';
 import { API_CONFIG } from '../constants';
 import { supabase } from '../supabaseClient';
@@ -19,6 +19,7 @@ import AdminLabelSettings from './AdminLabelSettings';
 import AdminLabelPriority from './AdminLabelPriority';
 import AdminRunningText from './AdminRunningText';
 import { AdminMenuSettings } from './AdminMenuSettings';
+import { SystemUpdateAdmin } from './SystemUpdateAdmin';
 import SqlEditor from './SqlEditor';
 import AdminNetworkDiagnostics from './AdminNetworkDiagnostics';
 import AdminTableCleaner from './AdminTableCleaner';
@@ -29,7 +30,7 @@ interface AdminProps {
     onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[]) => void;
 }
 
-type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip50k' | 'tableCleaner' | 'featureAudit';
+type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate';
 
 const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -88,7 +89,8 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                 { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
                 { id: 'dataManager', label: 'Kelola Data History', icon: FiTrash2 },
                 { id: 'toolkitAccess', label: 'Kontrol Akses Toolkit', icon: FiLock },
-                { id: 'menuSettings', label: 'Pengaturan Menu', icon: FiLayout }
+                { id: 'menuSettings', label: 'Pengaturan Menu', icon: FiLayout },
+                { id: 'systemUpdate', label: 'Manajemen Update Sistem', icon: FiUploadCloud }
             ]
         },
         (devMode && user?.role === 'developer') ? {
@@ -363,6 +365,9 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                     </div>
                     <div className={activeView === 'featureAudit' ? 'block' : 'hidden'}>
                         <AdminFeatureAudit showToast={showToast} />
+                    </div>
+                    <div className={activeView === 'systemUpdate' ? 'block' : 'hidden'}>
+                        <SystemUpdateAdmin />
                     </div>
 
                     {/* Dev Mode Only Views */}

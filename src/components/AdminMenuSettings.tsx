@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FiEye, FiEyeOff, FiArrowUp, FiArrowDown, FiSave, FiRefreshCw } from 'react-icons/fi';
 import { API_CONFIG } from '../constants';
+import { supabase } from '../supabaseClient';
 
 // Define the available menus
 const ALL_MENUS = [
@@ -119,6 +120,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
     };
 
     return (
+        
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="border-b border-gray-200 px-6 py-5 flex items-center justify-between bg-gray-50">
                 <div>
@@ -236,6 +238,8 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
                     </div>
                 </div>
             </div>
+
         </div>
+
     );
 };
