@@ -261,20 +261,12 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                         const { collection, query: fsQuery, orderBy, getDocs, where, Timestamp } = await import('firebase/firestore');
                         const { db } = await import('../firebaseClient');
 
-                        let constraints: any[] = [orderBy('created_at', 'desc')];
+                        // NO orderBy or multiple where fields to avoid requiring Firestore composite indexes
+                        let constraints: any[] = [];
 
                         // Filter by tenant_id (Data Isolation)
                         const tenantId = user?.tenant_id || user?.username || 'unknown';
                         constraints.push(where('tenant_id', '==', tenantId));
-
-                        // Date filter (WIB UTC+7)
-                        if (selectedDate) {
-                            const [yyyy, mm, dd] = selectedDate.split('-').map(Number);
-                            const startLocal = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
-                            const endLocal = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
-                            constraints.push(where('created_at', '>=', Timestamp.fromDate(startLocal)));
-                            constraints.push(where('created_at', '<=', Timestamp.fromDate(endLocal)));
-                        }
 
                         const q = fsQuery(collection(db, 'upload_tes_history'), ...constraints);
                         const snapshot = await getDocs(q);
@@ -299,6 +291,20 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                 username: d.picker_name || '',
                             };
                         });
+
+                        // 1. Sort by created_at DESC (Client-side)
+                        records.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+                        // 2. Client-side date filter (WIB UTC+7 boundary approximation)
+                        if (selectedDate) {
+                            const [yyyy, mm, dd] = selectedDate.split('-').map(Number);
+                            const startLocal = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0).getTime();
+                            const endLocal = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999).getTime();
+                            records = records.filter(r => {
+                                const time = new Date(r.created_at).getTime();
+                                return time >= startLocal && time <= endLocal;
+                            });
+                        }
 
                         // Client-side search filter
                         if (debouncedQuery && debouncedQuery.trim()) {
