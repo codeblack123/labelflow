@@ -354,7 +354,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                 // STRATEGY 2: Standard Supabase query
                 let query = supabase
                     .from('label_process_history')
-                    .select('*', { count: 'exact' });
+                    .select('*', { count: 'exact' })
+                    .eq('tenant_id', tenantId);
 
                 // Date filter — WIB (UTC+7)
                 if (selectedDate) {
@@ -505,17 +506,14 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
             const dbMode = localStorage.getItem('db_mode') || 'cloud';
             if (dbMode === 'cloud') {
                 try {
-                    const { collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
+                    const { doc, getDoc } = await import('firebase/firestore');
                     const { db } = await import('../firebaseClient');
-                    const q = query(
-                        collection(db, 'upload_tes_history'),
-                        where('excel_filename', '==', record.excel_filename),
-                        orderBy('created_at', 'desc'),
-                        limit(1)
-                    );
-                    const snap = await getDocs(q);
-                    if (!snap.empty) {
-                        const data = snap.docs[0].data();
+                    
+                    const docRef = doc(db, 'upload_tes_history', record.id);
+                    const snap = await getDoc(docRef);
+                    
+                    if (snap.exists()) {
+                        const data = snap.data();
                         let fileUrl = null;
                         if (type === 'excel') fileUrl = data.excel_url;
                         if (type === 'pdf-original') {

@@ -64,7 +64,7 @@ export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
                 matched_count: data.stats.matched_count || 0,
                 unmatched_excel_count: data.stats.unmatched_excel_count || 0,
                 unmatched_pdf_count: data.stats.unmatched_pdf_count || 0,
-                matched_awbs: data.stats.matched_awbs || data.stats.matched_with_awb || [],
+                matched_awbs: data.stats.matched_with_awb || data.stats.matched_awbs || [],
                 unmatched_excel_awbs: data.stats.unmatched_excel_awbs || data.stats.unmatched_excel || [],
                 unmatched_pdf_awbs: data.stats.unmatched_pdf_awbs || data.stats.unmatched_pdf || []
             }

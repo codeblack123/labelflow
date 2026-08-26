@@ -1003,8 +1003,8 @@ const App: React.FC = () => {
         }
 
         return (
-            <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-[100000]">
-                <div className="bg-gray-900/95 backdrop-blur shadow-xl text-white pl-4 pr-6 py-3.5 rounded-full text-sm font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="fixed top-[80px] left-1/2 transform -translate-x-1/2 z-[100000]">
+                <div className="bg-emerald-600/95 backdrop-blur shadow-xl text-white pl-4 pr-6 py-3.5 rounded-full text-sm font-medium flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
                     <div className="text-white/90">{icon}</div>
                     <span className="tracking-wide">{message}</span>
                 </div>
@@ -1116,7 +1116,7 @@ const App: React.FC = () => {
             matched_count: stats.matched_count || 0,
             unmatched_excel_count: stats.unmatched_excel_count || 0,
             unmatched_pdf_count: stats.unmatched_pdf_count || 0,
-            matched_awbs: stats.matched_awbs || [],
+            matched_awbs: stats.matched_with_awb || stats.matched_awbs || [],
             unmatched_excel_awbs: stats.unmatched_excel_awbs || [],
             unmatched_pdf_awbs: stats.unmatched_pdf_awbs || [],
             all_excel_awbs: stats.all_excel_awbs || [],
@@ -1660,7 +1660,7 @@ const App: React.FC = () => {
                 setStatus(ProcessStatus.COMPLETED);
 
                 setProcessStats({
-                    matched_awbs: data.stats.matched_awbs || [],
+                    matched_awbs: data.stats.matched_with_awb || data.stats.matched_awbs || [],
                     unmatched_excel_awbs: data.stats.unmatched_excel_awbs || [],
                     unmatched_pdf_awbs: data.stats.unmatched_pdf_awbs || [],
                     duplicate_awbs: data.stats.duplicate_awbs || [],
@@ -2974,7 +2974,7 @@ const App: React.FC = () => {
                 setTestStatus(ProcessStatus.COMPLETED);
 
                 setTestProcessStats({
-                    matched_awbs: data.stats.matched_awbs || [],
+                    matched_awbs: data.stats.matched_with_awb || data.stats.matched_awbs || [],
                     unmatched_excel_awbs: data.stats.unmatched_excel_awbs || [],
                     unmatched_pdf_awbs: data.stats.unmatched_pdf_awbs || [],
                     duplicate_awbs: data.stats.duplicate_awbs || [],
@@ -3236,7 +3236,7 @@ const App: React.FC = () => {
                 setFlexProcessedCount(prev => prev + 1);
 
                 setFlexStats({
-                    matched_awbs: stats.matched_awbs || [],
+                    matched_awbs: stats.matched_with_awb || stats.matched_awbs || [],
                     unmatched_excel_awbs: stats.unmatched_excel_awbs || [],
                     unmatched_pdf_awbs: stats.unmatched_pdf_awbs || [],
                     duplicate_awbs: stats.duplicate_awbs || [],
@@ -4970,13 +4970,7 @@ const App: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => setShowSqlEditor(true)}
-                                        className="flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-all shadow-lg active:scale-95"
-                                    >
-                                        <FiTerminal className="w-4 h-4 text-emerald-400" />
-                                        SQL EDITOR
-                                    </button>
+                                    
                                     <button
                                         onClick={() => {
                                             setIsAuthenticatedKembar(false);
@@ -5774,13 +5768,7 @@ const App: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => setShowSqlEditor(true)}
-                                        className="flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-all shadow-lg active:scale-95"
-                                    >
-                                        <FiTerminal className="w-4 h-4 text-emerald-400" />
-                                        SQL EDITOR
-                                    </button>
+                                    
                                     <button
                                         onClick={() => {
                                             setIsAuthenticatedKembar(false);

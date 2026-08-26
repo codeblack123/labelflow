@@ -220,7 +220,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                                         id="email"
                                         name="email"
                                         type="text"
-                                        autoComplete="username"
+                                        autoComplete="off"
+                                        tabIndex={1}
                                         required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
@@ -252,7 +253,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                                         id="password"
                                         name="password"
                                         type={showPassword ? 'text' : 'password'}
-                                        autoComplete="current-password"
+                                        autoComplete="new-password"
+                                        tabIndex={2}
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
@@ -293,6 +295,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                             <div className="pt-2">
                                 <button
                                     type="submit"
+                                    tabIndex={3}
                                     disabled={loading}
                                     className="w-full py-3.5 px-6 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] shadow-lg shadow-blue-600/30 hover:shadow-blue-500/40 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:pointer-events-none cursor-pointer"
                                 >
