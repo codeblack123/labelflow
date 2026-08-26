@@ -25,7 +25,7 @@ interface HistoryRecord {
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 interface OrderHistoryProps {
-    user: { username: string; role: string } | null;
+    user: { username: string; role: string; tenant_id?: string; parent_account?: string } | null;
 }
 
 const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
@@ -253,6 +253,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
 
         const doFetch = async () => {
             setLoading(true);
+            const activeTenantId = user?.tenant_id || user?.username || 'unknown';
+            
             try {
                 // ═══ FIRESTORE PATH (Cloud Mode) ═══
                 const dbMode = localStorage.getItem('db_mode') || 'cloud';
@@ -265,11 +267,13 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                         let constraints: any[] = [];
 
                         // Filter by tenant_id (Data Isolation)
-                        const tenantId = user?.tenant_id || user?.username || 'unknown';
-                        constraints.push(where('tenant_id', '==', tenantId));
+                        console.log('[RIWAYAT DEBUG] user object:', JSON.stringify({ username: user?.username, role: user?.role, tenant_id: user?.tenant_id, parent_account: user?.parent_account }));
+                        console.log('[RIWAYAT DEBUG] Using activeTenantId for query:', activeTenantId);
+                        constraints.push(where('tenant_id', '==', activeTenantId));
 
                         const q = fsQuery(collection(db, 'upload_tes_history'), ...constraints);
                         const snapshot = await getDocs(q);
+                        console.log('[RIWAYAT DEBUG] Firestore returned', snapshot.size, 'documents');
 
                         if (cancelled) return;
 
@@ -361,7 +365,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                 let query = supabase
                     .from('label_process_history')
                     .select('*', { count: 'exact' })
-                    .eq('tenant_id', tenantId);
+                    .eq('tenant_id', activeTenantId);
 
                 // Date filter — WIB (UTC+7)
                 if (selectedDate) {

@@ -75,7 +75,7 @@ interface ProSessionItem {
 const SESSION_TIMEOUT = 6 * 60 * 60 * 1000;
 
 const App: React.FC = () => {
-    const [user, setUser] = useState<{ username: string; role: string; full_name?: string; loginDate?: string; theme?: string } | null>(() => {
+    const [user, setUser] = useState<{ username: string; role: string; full_name?: string; loginDate?: string; theme?: string; tenant_id?: string; parent_account?: string } | null>(() => {
         if (typeof window !== 'undefined') {
             const savedUser = localStorage.getItem('user_session');
             if (savedUser) {
@@ -494,7 +494,7 @@ const App: React.FC = () => {
                     .eq('is_active', true)
                     .order('created_at', { ascending: false })
                     .limit(1)
-                    .single();
+                    .maybeSingle();
                 
                 if (data && !error) {
                     const ackVersion = localStorage.getItem('acknowledged_version');
