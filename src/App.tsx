@@ -483,6 +483,43 @@ const App: React.FC = () => {
     const [systemUpdate, setSystemUpdate] = useState<any>(null);
     const [showUpdateModal, setShowUpdateModal] = useState(false);
 
+    // --- Check System Update on Mount ---
+    useEffect(() => {
+        const checkSystemUpdate = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_updates')
+                    .select('*')
+                    .eq('is_active', true)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                
+                if (data && !error) {
+                    const ackVersion = localStorage.getItem('acknowledged_version');
+                    if (ackVersion !== data.version_code) {
+                        setSystemUpdate(data);
+                        setShowUpdateModal(true);
+                    } else {
+                        // If current update is already acknowledged, make sure modal is closed
+                        setShowUpdateModal(false);
+                    }
+                } else {
+                    // No active updates
+                    setShowUpdateModal(false);
+                }
+            } catch (err) {
+                console.error("Gagal mengecek update", err);
+            }
+        };
+        checkSystemUpdate();
+        
+        // Also check periodically every 15 seconds
+        const intervalId = setInterval(checkSystemUpdate, 15000);
+        return () => clearInterval(intervalId);
+    }, []);
+
+
     const [processStats2, setProcessStats2] = useState<ProcessStats | null>(null);
     const [duplicateData2, setDuplicateData2] = useState<{ count: number; items: any[] } | null>(null);
     const [isLocked2, setIsLocked2] = useState(false);
@@ -3258,41 +3295,6 @@ const App: React.FC = () => {
     }
 
 
-    // --- Check System Update on Mount ---
-    useEffect(() => {
-        const checkSystemUpdate = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('system_updates')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single();
-                
-                if (data && !error) {
-                    const ackVersion = localStorage.getItem('acknowledged_version');
-                    if (ackVersion !== data.version_code) {
-                        setSystemUpdate(data);
-                        setShowUpdateModal(true);
-                    } else {
-                        // If current update is already acknowledged, make sure modal is closed
-                        setShowUpdateModal(false);
-                    }
-                } else {
-                    // No active updates
-                    setShowUpdateModal(false);
-                }
-            } catch (err) {
-                console.error("Gagal mengecek update", err);
-            }
-        };
-        checkSystemUpdate();
-        
-        // Also check periodically every 15 seconds
-        const intervalId = setInterval(checkSystemUpdate, 15000);
-        return () => clearInterval(intervalId);
-    }, []);
 
     return (
         <div className="min-h-screen bg-[#f4f7fe]">
