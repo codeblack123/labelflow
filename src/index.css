@@ -1,0 +1,250 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Primary Theme RGB Variables (Default: Biru Tua) */
+    --theme-50: 239 246 255;
+    --theme-100: 219 234 254;
+    --theme-200: 191 219 254;
+    --theme-300: 147 197 253;
+    --theme-400: 96 165 250;
+    --theme-500: 59 130 246;
+    --theme-600: 37 99 235;
+    --theme-700: 29 78 216;
+    --theme-800: 30 64 175;
+    --theme-900: 30 58 138;
+    --theme-950: 15 23 42;
+
+    /* Primary Palette linked to Theme */
+    --primary: rgb(var(--theme-600));
+    --primary-hover: rgb(var(--theme-700));
+    --primary-light: rgb(var(--theme-50));
+    --primary-border: rgb(var(--theme-200));
+
+    /* Accent */
+    --accent: rgb(var(--theme-500));
+    --accent-hover: rgb(var(--theme-600));
+
+    /* Status */
+    --success: #059669;
+    --success-light: #ecfdf5;
+    --warning: #d97706;
+    --warning-light: #fffbeb;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+
+    /* Neutral — Slate-based for premium feel */
+    --bg-page: #f1f5f9;
+    --bg-card: #ffffff;
+    --border: #e2e8f0;
+    --border-subtle: #f1f5f9;
+
+    --text-heading: #0f172a;
+    --text-body: #334155;
+    --text-muted: #64748b;
+    --text-placeholder: #94a3b8;
+
+    /* Navbar Dark */
+    --nav-bg: #0f172a;
+    --nav-border: #1e293b;
+    --nav-text: #cbd5e1;
+    --nav-text-muted: #64748b;
+    --nav-active-bg: rgb(var(--theme-700));
+    --nav-hover-bg: #1e293b;
+
+    /* Shadows */
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.08);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+    /* Radius */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.25rem;
+
+    /* Legacy gray vars (keep for backward compat) */
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-page);
+    color: var(--text-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
+}
+
+#root {
+    min-height: 100vh;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* ─── Focus Accessibility ────────────────────────────── */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ─── Smooth Animations ──────────────────────────────── */
+button,
+a,
+.interactive {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Premium Card ───────────────────────────────────── */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+}
+
+.card-hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+/* ─── Badge Utility ──────────────────────────────────── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.badge-blue   { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.badge-green  { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.badge-amber  { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.badge-red    { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-gray   { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+.badge-indigo { background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; }
+
+/* ─── Table Premium ──────────────────────────────────── */
+.table-premium {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.table-premium th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.table-premium td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: var(--text-body);
+    vertical-align: middle;
+}
+
+.table-premium tbody tr {
+    transition: background-color 0.1s ease;
+}
+
+.table-premium tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+/* ─── Input Premium ──────────────────────────────────── */
+.input-premium {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    color: var(--text-heading);
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-xs);
+}
+
+.input-premium:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input-premium::placeholder {
+    color: var(--text-placeholder);
+}
+
+/* ─── Skeleton Loading ───────────────────────────────── */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-md);
+}
+
+/* ─── Section Divider ────────────────────────────────── */
+.section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 1.5rem 0;
+}

@@ -1,0 +1,7 @@
+TABLE: sku_mappings              | STATUS: 200 | ROWS: 1
+TABLE: sku_categories            | STATUS: 200 | ROWS: 1
+TABLE: sku_category_members      | STATUS: 200 | ROWS: 1
+TABLE: sku_priority_bottom       | STATUS: 200 | ROWS: 1
+TABLE: sku_formatting_colors     | STATUS: 200 | ROWS: 1
+TABLE: sku_formatting_styles     | STATUS: 200 | ROWS: 1
+TABLE: sku_column_settings       | STATUS: 200 | ROWS: 1

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipping Label Customizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        blue: {
+                            50: 'rgb(var(--theme-50, 239 246 255) / <alpha-value>)',
+                            100: 'rgb(var(--theme-100, 219 234 254) / <alpha-value>)',
+                            200: 'rgb(var(--theme-200, 191 219 254) / <alpha-value>)',
+                            300: 'rgb(var(--theme-300, 147 197 253) / <alpha-value>)',
+                            400: 'rgb(var(--theme-400, 96 165 250) / <alpha-value>)',
+                            500: 'rgb(var(--theme-500, 59 130 246) / <alpha-value>)',
+                            600: 'rgb(var(--theme-600, 37 99 235) / <alpha-value>)',
+                            700: 'rgb(var(--theme-700, 29 78 216) / <alpha-value>)',
+                            800: 'rgb(var(--theme-800, 30 64 175) / <alpha-value>)',
+                            900: 'rgb(var(--theme-900, 30 58 138) / <alpha-value>)'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.tsx"></script>
+</body>
+</html>

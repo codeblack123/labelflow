@@ -1,0 +1,6 @@
+@app.get("/settings/sku-vip")
+@app.post("/settings/sku-vip")
+@app.delete("/settings/sku-vip/{sku}")
+@app.post("/settings/sku-vip/bulk-delete")
+@app.post("/settings/sku-vip/export")
+@app.post("/settings/import-sku-vip")
