@@ -1,1 +1,1 @@
-{"hidden_menus": ["upload", "bulkUpload", "bulkUploadPro", "uploadFlex"], "menu_order": ["dashboard", "upload2", "uploadTest", "upload", "history", "bulkUpload", "bulkUploadTest", "bulkUploadTes", "bulkUploadPro", "uploadFlex", "toolkit", "admin", "profil"]}
+{"hidden_menus": ["upload", "bulkUpload", "bulkUploadPro", "uploadFlex", "uploadTest", "bulkUploadTest"], "menu_order": ["dashboard", "upload2", "uploadTest", "upload", "history", "bulkUpload", "bulkUploadTest", "bulkUploadTes", "bulkUploadPro", "uploadFlex", "toolkit", "admin", "profil"]}
