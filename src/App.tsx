@@ -2975,7 +2975,8 @@ const App: React.FC = () => {
                         packingListContent: data.packing_list || null,
                         stats: data.stats,
                         pickerName: pickerName.trim(),
-                        tenantId: user?.tenant_id || user?.username || 'unknown'
+                        tenantId: user?.tenant_id || user?.username || 'unknown',
+                        historyId: historyId // PASS SUPABASE UUID
                     }).then(success => {
                         if (success) console.log('[FIREBASE] Upload Label success');
                         else console.error('[FIREBASE] Upload Label failed');

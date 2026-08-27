@@ -1,5 +1,5 @@
 import { ref, uploadBytesResumable, getDownloadURL, uploadString } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, storage } from '../firebaseClient';
 
 export interface FirebaseUploadData {
@@ -10,6 +10,7 @@ export interface FirebaseUploadData {
     stats: any;
     pickerName: string;
     tenantId: string;
+    historyId: string; // Add Supabase historyId to match IDs
 }
 
 export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
@@ -47,9 +48,9 @@ export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
             packingListUrl = await getDownloadURL(plRef);
         }
 
-        // 5. Save Metadata to Firestore
-        const metadataRef = collection(db, 'upload_tes_history');
-        const docRef = await addDoc(metadataRef, {
+// 5. Save Metadata to Firestore with the SAME ID as Supabase
+        const docRef = doc(db, 'upload_tes_history', data.historyId);
+        await setDoc(docRef, {
             created_at: serverTimestamp(),
             picker_name: data.pickerName,
             tenant_id: data.tenantId,
@@ -70,7 +71,7 @@ export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
             }
         });
 
-        console.log("Document written with ID: ", docRef.id);
+        console.log("Document written with ID: ", data.historyId);
         return true;
     } catch (e: any) {
         // Suppress noisy error in console, just warn since it's expected with strict rules
