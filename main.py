@@ -1733,7 +1733,7 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
                 batch_num = i // chunk_size + 1
                 try:
                     await supabase_fetch(
-                        "POST", "sku_mappings",
+                        "POST", "sku_mappings?on_conflict=custom_id,gudang_id",
                         data=chunk,
                         headers={
                             "Prefer": "resolution=merge-duplicates,return=minimal"
