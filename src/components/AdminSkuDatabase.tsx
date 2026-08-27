@@ -176,10 +176,10 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) 
         setIsLoading(true);
         try {
             if (deleteConfig.type === 'single' && deleteConfig.id) {
-                await axios.delete(`${API_CONFIG.BASE_URL}/settings/sku-mappings/${encodeURIComponent(deleteConfig.id)}`);
+                await axios.delete(`${API_CONFIG.BASE_URL}/settings/sku-mappings/${encodeURIComponent(deleteConfig.id)}?gudang_id=${activeWarehouseId}`);
                 if (showToast) showToast('✓ Data berhasil dihapus');
             } else if (deleteConfig.type === 'bulk') {
-                await axios.post(`${API_CONFIG.BASE_URL}/settings/sku-mappings/bulk-delete`, { ids: selectedIds });
+                await axios.post(`${API_CONFIG.BASE_URL}/settings/sku-mappings/bulk-delete`, { ids: selectedIds, gudang_id: activeWarehouseId });
                 if (showToast) showToast(`✓ ${selectedIds.length} data berhasil dihapus`);
                 setSelectedIds([]);
             } else if (deleteConfig.type === 'all') {
@@ -230,7 +230,7 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) 
         if (selectedIds.length === 0) return;
         setIsBulkDeleting(true);
         try {
-            await axios.post(`${API_CONFIG.BASE_URL}/settings/sku-mappings/bulk-delete`, { ids: selectedIds });
+            await axios.post(`${API_CONFIG.BASE_URL}/settings/sku-mappings/bulk-delete`, { ids: selectedIds, gudang_id: activeWarehouseId });
             if (showToast) showToast(`✓ ${selectedIds.length} data berhasil dihapus`);
             setSelectedIds([]);
             fetchMappings();
