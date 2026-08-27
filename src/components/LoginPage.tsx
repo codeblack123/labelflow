@@ -27,6 +27,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [rememberMe, setRememberMe] = useState(false);
+    const [isEmailFormat, setIsEmailFormat] = useState(false);
 
     // Load saved credentials on mount
     React.useEffect(() => {
@@ -49,11 +50,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
         setError(null);
 
         try {
+            let finalUsername = email.toLowerCase().trim();
+            if (isEmailFormat && !finalUsername.includes('@')) {
+                finalUsername += '@labelflow.com';
+            }
+
             // Check against auth_users table
             const { data, error } = await supabase
                 .from('auth_users')
                 .select('*')
-                .eq('username', email.toLowerCase().trim())
+                .eq('username', finalUsername)
                 .eq('password', password)
                 .maybeSingle();
 
@@ -209,10 +215,19 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
 
                             {/* Username Input */}
                             <div>
-                                <label htmlFor="email" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                                    Username / Pengguna
-                                </label>
-                                <div className="relative rounded-xl">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label htmlFor="email" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        {isEmailFormat ? 'Email Pengguna' : 'Username / Pengguna'}
+                                    </label>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsEmailFormat(!isEmailFormat)}
+                                        className="text-[10px] sm:text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 hover:bg-blue-500/20 px-2 py-1 rounded-md"
+                                    >
+                                        Ganti ke {isEmailFormat ? 'Username' : 'Email'}
+                                    </button>
+                                </div>
+                                <div className="relative rounded-xl flex items-center bg-slate-950/80 border border-slate-800 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all overflow-hidden">
                                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                                         <FiUser className="h-5 w-5" />
                                     </div>
@@ -225,9 +240,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                                         required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 hover:border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-sm text-white placeholder-slate-500 transition-all outline-none"
-                                        placeholder="Masukkan username Anda"
+                                        className={`w-full pl-11 py-3 bg-transparent text-sm text-white placeholder-slate-500 outline-none ${isEmailFormat ? 'pr-0' : 'pr-4'}`}
+                                        placeholder={`Masukkan ${isEmailFormat ? 'email depan' : 'username'} Anda`}
                                     />
+                                    {isEmailFormat && (
+                                        <div className="pr-4 pl-1 text-slate-500 text-sm font-medium pointer-events-none whitespace-nowrap bg-transparent">
+                                            @labelflow.com
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

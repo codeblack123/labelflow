@@ -72,8 +72,9 @@ export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
 
         console.log("Document written with ID: ", docRef.id);
         return true;
-    } catch (e) {
-        console.error("Error adding document: ", e);
+    } catch (e: any) {
+        // Suppress noisy error in console, just warn since it's expected with strict rules
+        console.warn("[FIREBASE] Upload failed (expected if strict rules are applied):", e.message);
         return false;
     }
 };

@@ -202,8 +202,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                     // Delete the Firestore document
                     await deleteDoc(docRef);
                 } catch (cloudErr: any) {
-                    console.error('Error deleting cloud record:', cloudErr);
-                    alert(`⚠️ Gagal menghapus file di Firebase Storage/Firestore (${cloudErr.message}). Akan tetap mencoba menghapus dari database utama (Supabase).`);
+                    // Suppress noisy error in console, just warn since it's expected with strict rules
+                    console.warn('[FIREBASE] Failed to delete file/record:', cloudErr.message);
                     // We REMOVED the "return;" here so it falls through and deletes from Supabase!
                 }
             }
@@ -362,9 +362,9 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                         setTotalRecords(totalCount);
                         setLoading(false);
                         return; // Done — skip Supabase path
-                    } catch (fbErr) {
-                        console.error('[FIRESTORE] Fetch failed, falling back to Supabase:', fbErr);
-                        // Fall through to Supabase
+                    } catch (firestoreErr: any) {
+                        console.warn('[FIRESTORE] Fetch failed, falling back to Supabase:', firestoreErr.message);
+                        const { supabase } = await import('../supabaseClient');
                     }
                 }
 
