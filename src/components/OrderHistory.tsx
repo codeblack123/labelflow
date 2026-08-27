@@ -542,9 +542,31 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
             const dbMode = localStorage.getItem('db_mode') || 'cloud';
             if (dbMode === 'cloud') {
                 try {
+                    const { ref, getDownloadURL } = await import('firebase/storage');
+                    const { storage, db } = await import('../firebaseClient');
                     const { doc, getDoc } = await import('firebase/firestore');
-                    const { db } = await import('../firebaseClient');
-                    
+
+                    // 1. DIRECT STORAGE FETCH (FAST & NO FIRESTORE PERMISSION ERRORS)
+                    let directPath = '';
+                    if (type === 'excel') directPath = `upload_tes/${record.id}/excel_original/${record.excel_filename}`;
+                    if (type === 'pdf-original' && record.pdf_filenames && record.pdf_filenames.length > 0) {
+                        directPath = `upload_tes/${record.id}/pdf_original/${record.pdf_filenames[0]}`;
+                    }
+                    if (type === 'pdf-result') directPath = `upload_tes/${record.id}/pdf_hasil/Labels_Custom_Gabungan.pdf`;
+                    if (type === 'packing-list') directPath = `upload_tes/${record.id}/packing_list/packing_list.csv`;
+
+                    if (directPath) {
+                        try {
+                            const fileRef = ref(storage, directPath);
+                            const url = await getDownloadURL(fileRef);
+                            window.open(url, '_blank');
+                            return; // Success!
+                        } catch (directErr) {
+                            console.warn('File not found via direct ID path, falling back to Firestore metadata...');
+                        }
+                    }
+
+                    // 2. FALLBACK TO FIRESTORE (For older uploads that used timestamp)
                     const docRef = doc(db, 'upload_tes_history', record.id);
                     const snap = await getDoc(docRef);
                     

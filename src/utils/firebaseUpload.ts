@@ -15,8 +15,8 @@ export interface FirebaseUploadData {
 
 export const saveUploadTesToFirebase = async (data: FirebaseUploadData) => {
     try {
-        const timestamp = new Date().getTime();
-        const folderName = `upload_tes/${timestamp}`;
+        const uniqueId = data.historyId || new Date().getTime().toString();
+        const folderName = `upload_tes/${uniqueId}`;
 
         // 1. Upload Excel
         const excelRef = ref(storage, `${folderName}/excel_original/${data.excelFile.name}`);
