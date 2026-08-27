@@ -114,7 +114,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                             </div>
                             <div>
                                 <h1 className="text-lg font-bold bg-gradient-to-r from-white via-slate-200 to-blue-300 bg-clip-text text-transparent tracking-tight">
-                                    Label Customizer
+                                    Label Flow
                                 </h1>
                                 <span className="text-[10px] font-semibold text-blue-400/90 tracking-wider uppercase">
                                     Enterprise Suite
@@ -184,7 +184,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
                             <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400">
                                 <FiActivity className="w-4 h-4" />
                             </div>
-                            <span className="text-sm font-bold text-white tracking-tight">Label Customizer</span>
+                            <span className="text-sm font-bold text-white tracking-tight">Label Flow</span>
                         </div>
                     </div>
 

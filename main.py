@@ -2558,48 +2558,130 @@ from typing import List
 class MenuSettingsItem(BaseModel):
     hidden_menus: List[str]
     menu_order: List[str]
+    skip_pin_menus: List[str] = []
 
 @app.get("/settings/menu")
 async def get_menu_settings():
     cache_file = "menu_settings_cache.json"
+    result = {"hidden_menus": [], "menu_order": [], "skip_pin_menus": []}
+    
+    # 1. Try fetching from menu_settings
     try:
-        data = await supabase_fetch("GET", "menu_settings?select=hidden_menus,menu_order&limit=1")
+        data = await supabase_fetch("GET", "menu_settings?select=hidden_menus,menu_order,skip_pin_menus&limit=1")
         if data and isinstance(data, list) and len(data) > 0:
-            result = data[0]
-            try:
-                with open(cache_file, 'w', encoding='utf-8') as f: json.dump(result, f)
-            except: pass
-            return result
-    except Exception as e:
-        print(f"Menu Settings Get Error: {e}")
-    # Fallback to local cache
+            result["hidden_menus"] = data[0].get("hidden_menus", [])
+            result["menu_order"] = data[0].get("menu_order", [])
+            result["skip_pin_menus"] = data[0].get("skip_pin_menus", [])
+        else:
+            raise Exception("No data with skip_pin_menus column")
+    except Exception:
+        # Fallback: column skip_pin_menus might not exist in menu_settings table
+        try:
+            data = await supabase_fetch("GET", "menu_settings?select=hidden_menus,menu_order&limit=1")
+            if data and isinstance(data, list) and len(data) > 0:
+                result["hidden_menus"] = data[0].get("hidden_menus", [])
+                result["menu_order"] = data[0].get("menu_order", [])
+        except Exception as e:
+            print(f"Fallback menu_settings error: {e}")
+
+    # 2. If skip_pin_menus is empty, try fetching from app_settings
+    if not result.get("skip_pin_menus"):
+        try:
+            res = await supabase_fetch("GET", "app_settings?key=eq.skip_pin_menus")
+            if res and isinstance(res, list) and len(res) > 0:
+                val = res[0].get('value', '[]')
+                result["skip_pin_menus"] = json.loads(val) if isinstance(val, str) else val
+        except Exception as e:
+            print(f"app_settings skip_pin_menus read error: {e}")
+
+    # 3. If we got some data, update local cache
+    if result.get("menu_order") or result.get("hidden_menus") or result.get("skip_pin_menus"):
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(result, f)
+        except Exception:
+            pass
+        return result
+
+    # 4. Fallback to local cache
     if os.path.exists(cache_file):
         try:
-            with open(cache_file, 'r', encoding='utf-8') as f: return json.load(f)
-        except: pass
-    return {"hidden_menus": [], "menu_order": []}
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    return result
 
 @app.post("/settings/menu")
 async def save_menu_settings(item: MenuSettingsItem):
+    cache_file = "menu_settings_cache.json"
+    cache_payload = {
+        "hidden_menus": item.hidden_menus,
+        "menu_order": item.menu_order,
+        "skip_pin_menus": item.skip_pin_menus
+    }
+    # Always update local cache file immediately
     try:
-        # Check if row exists
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(cache_payload, f)
+    except Exception as cf_err:
+        print(f"Failed to write menu_settings_cache.json: {cf_err}")
+
+    # 1. Save skip_pin_menus to app_settings as reliable key-value store
+    try:
+        existing_app_set = await supabase_fetch("GET", "app_settings?key=eq.skip_pin_menus")
+        if existing_app_set and isinstance(existing_app_set, list) and len(existing_app_set) > 0:
+            await supabase_fetch("PATCH", "app_settings?key=eq.skip_pin_menus", data={
+                "value": json.dumps(item.skip_pin_menus),
+                "description": "Daftar menu yang di-skip modal PIN"
+            })
+        else:
+            await supabase_fetch("POST", "app_settings", data={
+                "key": "skip_pin_menus",
+                "value": json.dumps(item.skip_pin_menus),
+                "description": "Daftar menu yang di-skip modal PIN"
+            })
+    except Exception as e:
+        print(f"Failed to save to app_settings: {e}")
+
+    # 2. Save to menu_settings
+    try:
         existing = await supabase_fetch("GET", "menu_settings?select=id&limit=1")
         if existing and isinstance(existing, list) and len(existing) > 0:
             row_id = existing[0]['id']
-            await supabase_fetch("PATCH", f"menu_settings?id=eq.{row_id}", data={
-                "hidden_menus": item.hidden_menus,
-                "menu_order": item.menu_order,
-                "updated_at": datetime.now().isoformat()
-            })
+            try:
+                await supabase_fetch("PATCH", f"menu_settings?id=eq.{row_id}", data={
+                    "hidden_menus": item.hidden_menus,
+                    "menu_order": item.menu_order,
+                    "skip_pin_menus": item.skip_pin_menus,
+                    "updated_at": datetime.now().isoformat()
+                })
+            except Exception:
+                # If column skip_pin_menus does not exist, save without it
+                await supabase_fetch("PATCH", f"menu_settings?id=eq.{row_id}", data={
+                    "hidden_menus": item.hidden_menus,
+                    "menu_order": item.menu_order,
+                    "updated_at": datetime.now().isoformat()
+                })
         else:
-            await supabase_fetch("POST", "menu_settings", data={
-                "hidden_menus": item.hidden_menus,
-                "menu_order": item.menu_order,
-                "updated_at": datetime.now().isoformat()
-            })
+            try:
+                await supabase_fetch("POST", "menu_settings", data={
+                    "hidden_menus": item.hidden_menus,
+                    "menu_order": item.menu_order,
+                    "skip_pin_menus": item.skip_pin_menus,
+                    "updated_at": datetime.now().isoformat()
+                })
+            except Exception:
+                await supabase_fetch("POST", "menu_settings", data={
+                    "hidden_menus": item.hidden_menus,
+                    "menu_order": item.menu_order,
+                    "updated_at": datetime.now().isoformat()
+                })
         return {"success": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Supabase menu_settings save error: {e}")
+        return {"success": True, "saved_locally": True}
 
 # --- TOOLKIT ORDER ---
 

@@ -184,6 +184,17 @@ const App: React.FC = () => {
         }
         return ['upload', 'upload2', 'bulkUpload', 'bulkUploadPro', 'uploadFlex', 'settings'];
     });
+    const [skipPinMenus, setSkipPinMenus] = useState<string[]>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const cached = localStorage.getItem('app_skip_pin_menus');
+                if (cached) return JSON.parse(cached);
+            } catch (e) {
+                console.error("Failed to parse cached skip pin menus", e);
+            }
+        }
+        return [];
+    });
 
     useEffect(() => {
         const fetchMenuSettings = async () => {
@@ -204,6 +215,19 @@ const App: React.FC = () => {
                     if (response.data.hidden_menus) {
                         setHiddenMenus(response.data.hidden_menus);
                         localStorage.setItem('app_hidden_menus', JSON.stringify(response.data.hidden_menus));
+                    }
+                    let skips = response.data?.skip_pin_menus;
+                    if (!skips || skips.length === 0) {
+                        try {
+                            const { data: appSet } = await supabase.from('app_settings').select('value').eq('key', 'skip_pin_menus').single();
+                            if (appSet && appSet.value) {
+                                skips = typeof appSet.value === 'string' ? JSON.parse(appSet.value) : appSet.value;
+                            }
+                        } catch (e) {}
+                    }
+                    if (skips) {
+                        setSkipPinMenus(skips);
+                        localStorage.setItem('app_skip_pin_menus', JSON.stringify(skips));
                     }
                 }
             } catch (err) {
@@ -1868,7 +1892,8 @@ const App: React.FC = () => {
                         packingListContent: data.packing_list || null,
                         stats: data.stats,
                         pickerName: pickerName.trim(),
-                        tenantId: user?.tenant_id || user?.username || 'unknown'
+                        tenantId: user?.tenant_id || user?.username || 'unknown',
+                        historyId: historyId // PASS SUPABASE UUID
                     }).then(success => {
                         if (success) console.log('[FIREBASE] Upload Kembar success');
                         else console.error('[FIREBASE] Upload Kembar failed');
@@ -2632,7 +2657,8 @@ const App: React.FC = () => {
                         packingListContent: response.data.packing_list || null,
                         stats: stats,
                         pickerName: pickerName.trim(),
-                        tenantId: user?.tenant_id || user?.username || 'unknown'
+                        tenantId: user?.tenant_id || user?.username || 'unknown',
+                        historyId: historyId // PASS SUPABASE UUID
                     }).then((success) => {
                         if (success) console.log('[FIREBASE] Upload Massal Label success');
                         else console.error('[FIREBASE] Upload Massal Label failed');
@@ -4615,7 +4641,7 @@ const App: React.FC = () => {
                                         disabled={!testExcelFile || testPdfFiles.length === 0 || !pickerName.trim()}
                                         className={`w-full py-4 px-8 rounded-2xl font-extrabold text-base tracking-wide transition-all duration-300 flex items-center justify-center gap-3 shadow-lg cursor-pointer transform hover:-translate-y-0.5 ${(!testExcelFile || testPdfFiles.length === 0 || !pickerName.trim())
                                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
-                                            : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-600/30 hover:shadow-xl hover:shadow-blue-600/40'
+                                            : 'bg-[rgb(var(--theme-600))] hover:bg-[rgb(var(--theme-700))] text-white shadow-[rgb(var(--theme-600))]/30 hover:shadow-xl hover:shadow-[rgb(var(--theme-600))]/40'
                                             }`}
                                     >
                                         <FiZap className="w-5 h-5" />
@@ -4942,7 +4968,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 ) : (activeMenu as string) === 'upload2' ? (
-                    !isAuthenticatedKembar ? (
+                    !isAuthenticatedKembar && !skipPinMenus.includes('upload2') ? (
                         <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in zoom-in-95 duration-500">
                             <div className="w-full max-w-md bg-white p-10 rounded-3xl border border-gray-100 shadow-2xl shadow-emerald-500/10">
                                 <div className="text-center mb-10">
@@ -5506,7 +5532,7 @@ const App: React.FC = () => {
                                         disabled={!testExcelFile || testPdfFiles.length === 0}
                                         className={`w-full py-4 px-8 rounded-2xl font-extrabold text-base tracking-wide transition-all duration-300 flex items-center justify-center gap-3 shadow-lg cursor-pointer transform hover:-translate-y-0.5 ${(!testExcelFile || testPdfFiles.length === 0)
                                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
-                                            : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-600/30 hover:shadow-xl hover:shadow-blue-600/40'
+                                            : 'bg-[rgb(var(--theme-600))] hover:bg-[rgb(var(--theme-700))] text-white shadow-[rgb(var(--theme-600))]/30 hover:shadow-xl hover:shadow-[rgb(var(--theme-600))]/40'
                                             }`}
                                     >
                                         <FiZap className="w-5 h-5" />
@@ -5749,7 +5775,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 ) : (activeMenu as string) === 'upload2' ? (
-                    !isAuthenticatedKembar ? (
+                    !isAuthenticatedKembar && !skipPinMenus.includes('upload2') ? (
                         <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in zoom-in-95 duration-500">
                             <div className="w-full max-w-md bg-white p-10 rounded-3xl border border-gray-100 shadow-2xl shadow-emerald-500/10">
                                 <div className="text-center mb-10">
@@ -6687,7 +6713,7 @@ const App: React.FC = () => {
                         {bulkTestPdfFiles.length > 0 && <FilePreviewTable files={bulkTestPdfPreviewList} />}
                     </div>
                 ) : activeMenu === 'bulkUploadPro' ? (
-                    !isProUnlocked ? (
+                    !isProUnlocked && !skipPinMenus.includes('bulkUploadPro') ? (
                         <div className="flex flex-col items-center justify-center min-h-[60vh] bg-gray-50/50">
                             <div className="w-full max-w-md bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
                                 <div className="text-center mb-8">
@@ -7163,9 +7189,20 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 ) : activeMenu === 'admin' ? (
-                    <Admin user={user as any} showToast={showToast} onMenuSettingsChanged={(newOrder, newHidden) => { setMenuOrder(newOrder); setHiddenMenus(newHidden); }} />
+                    <Admin 
+                        user={user as any} 
+                        showToast={showToast} 
+                        onMenuSettingsChanged={(newOrder, newHidden, newSkip) => { 
+                            setMenuOrder(newOrder); 
+                            setHiddenMenus(newHidden); 
+                            if (newSkip) {
+                                setSkipPinMenus(newSkip);
+                                localStorage.setItem('app_skip_pin_menus', JSON.stringify(newSkip));
+                            }
+                        }} 
+                    />
                 ) : activeMenu === 'toolkit' ? (
-                    <Toolkit showToast={showToast} />
+                    <Toolkit showToast={showToast} skipPin={skipPinMenus.includes('toolkit')} />
                 ) : activeMenu === 'profil' ? (
                     <Profil user={user as any} showToast={showToast} onLogout={handleLogout} />
                 ) : activeMenu === 'settings' ? (
@@ -7271,7 +7308,7 @@ const App: React.FC = () => {
             {/* Footer */}
             <footer className="py-6 text-center">
                 <p className="text-gray-400 text-xs">
-                    © 2026 Label Customizer
+                    © 2026 Label Flow
                 </p>
             </footer>
             <GlobalNotificationModal />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FiEye, FiEyeOff, FiArrowUp, FiArrowDown, FiSave, FiRefreshCw } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiArrowUp, FiArrowDown, FiSave, FiRefreshCw, FiUnlock, FiLock } from 'react-icons/fi';
 import { API_CONFIG } from '../constants';
 import { supabase } from '../supabaseClient';
 
@@ -22,12 +22,13 @@ const ALL_MENUS = [
 ];
 
 interface AdminMenuSettingsProps {
-    onSettingsChanged?: (menuOrder: string[], hiddenMenus: string[]) => void;
+    onSettingsChanged?: (menuOrder: string[], hiddenMenus: string[], skipPinMenus: string[]) => void;
 }
 
 export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettingsChanged }) => {
     const [menuOrder, setMenuOrder] = useState<string[]>([]);
     const [hiddenMenus, setHiddenMenus] = useState<string[]>([]);
+    const [skipPinMenus, setSkipPinMenus] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -40,6 +41,22 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
             const data = response.data;
             let order = data.menu_order || [];
             let hidden = data.hidden_menus || [];
+            let skip = data.skip_pin_menus || [];
+            if (!skip || skip.length === 0) {
+                // Fallback to Supabase app_settings directly
+                try {
+                    const { data: appSet } = await supabase.from('app_settings').select('value').eq('key', 'skip_pin_menus').single();
+                    if (appSet && appSet.value) {
+                        skip = typeof appSet.value === 'string' ? JSON.parse(appSet.value) : appSet.value;
+                    }
+                } catch (e) {}
+            }
+            if (!skip || skip.length === 0) {
+                try {
+                    const cached = localStorage.getItem('app_skip_pin_menus');
+                    if (cached) skip = JSON.parse(cached);
+                } catch (e) {}
+            }
 
             // If order is empty, populate with default order
             if (!order || order.length === 0) {
@@ -54,6 +71,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
             
             setMenuOrder(order);
             setHiddenMenus(hidden);
+            setSkipPinMenus(skip || []);
         } catch (error) {
             console.error('Error fetching menu settings:', error);
             setMessage({ type: 'error', text: 'Gagal mengambil konfigurasi menu. Pastikan backend menyala.' });
@@ -70,15 +88,32 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
         setIsSaving(true);
         setMessage(null);
         try {
+            // Save to localStorage immediately
+            localStorage.setItem('app_menu_order', JSON.stringify(menuOrder));
+            localStorage.setItem('app_hidden_menus', JSON.stringify(hiddenMenus));
+            localStorage.setItem('app_skip_pin_menus', JSON.stringify(skipPinMenus));
+
+            // Also directly persist to Supabase app_settings
+            try {
+                await supabase.from('app_settings').upsert({
+                    key: 'skip_pin_menus',
+                    value: JSON.stringify(skipPinMenus),
+                    description: 'Daftar menu yang di-skip modal PIN'
+                });
+            } catch (sbErr) {
+                console.warn('Direct Supabase app_settings write failed:', sbErr);
+            }
+
             await axios.post(`${API_CONFIG.BASE_URL}/settings/menu`, {
                 hidden_menus: hiddenMenus,
-                menu_order: menuOrder
+                menu_order: menuOrder,
+                skip_pin_menus: skipPinMenus
             });
             setMessage({ type: 'success', text: 'Konfigurasi menu berhasil disimpan!' });
             
             // Notify parent to update navigation in real-time
             if (onSettingsChanged) {
-                onSettingsChanged(menuOrder, hiddenMenus);
+                onSettingsChanged(menuOrder, hiddenMenus, skipPinMenus);
             }
         } catch (error) {
             console.error('Error saving menu settings:', error);
@@ -101,7 +136,19 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
             newHidden = [...hiddenMenus, menuId];
         }
         setHiddenMenus(newHidden);
-        if (onSettingsChanged) onSettingsChanged(menuOrder, newHidden);
+        if (onSettingsChanged) onSettingsChanged(menuOrder, newHidden, skipPinMenus);
+    };
+
+    const toggleSkipPin = (menuId: string) => {
+        let newSkip: string[];
+        if (skipPinMenus.includes(menuId)) {
+            newSkip = skipPinMenus.filter(id => id !== menuId);
+        } else {
+            newSkip = [...skipPinMenus, menuId];
+        }
+        setSkipPinMenus(newSkip);
+        localStorage.setItem('app_skip_pin_menus', JSON.stringify(newSkip));
+        if (onSettingsChanged) onSettingsChanged(menuOrder, hiddenMenus, newSkip);
     };
 
     const moveUp = (index: number) => {
@@ -111,7 +158,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
         newOrder[index - 1] = newOrder[index];
         newOrder[index] = temp;
         setMenuOrder(newOrder);
-        if (onSettingsChanged) onSettingsChanged(newOrder, hiddenMenus);
+        if (onSettingsChanged) onSettingsChanged(newOrder, hiddenMenus, skipPinMenus);
     };
 
     const moveDown = (index: number) => {
@@ -121,7 +168,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
         newOrder[index + 1] = newOrder[index];
         newOrder[index] = temp;
         setMenuOrder(newOrder);
-        if (onSettingsChanged) onSettingsChanged(newOrder, hiddenMenus);
+        if (onSettingsChanged) onSettingsChanged(newOrder, hiddenMenus, skipPinMenus);
     };
 
     return (
@@ -175,9 +222,10 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                     <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
                         <div className="col-span-1 text-center">Urutan</div>
-                        <div className="col-span-5">Nama Menu</div>
+                        <div className="col-span-4">Nama Menu</div>
                         <div className="col-span-2 text-center">Status</div>
-                        <div className="col-span-4 text-right">Aksi</div>
+                        <div className="col-span-2 text-center">Skip PIN</div>
+                        <div className="col-span-3 text-right">Aksi</div>
                     </div>
                     <div className="divide-y divide-gray-100">
                         {menuOrder.map((menuId, index) => {
@@ -193,7 +241,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
                                             {index + 1}
                                         </span>
                                     </div>
-                                    <div className="col-span-5">
+                                    <div className="col-span-4">
                                         <div className="font-semibold text-gray-900">{menuDef.label}</div>
                                         <div className="text-xs text-gray-500 font-mono mt-0.5">ID: {menuId}</div>
                                     </div>
@@ -208,7 +256,20 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
                                             </span>
                                         )}
                                     </div>
-                                    <div className="col-span-4 flex items-center justify-end gap-2">
+                                    <div className="col-span-2 text-center">
+                                        {['upload2', 'bulkUploadTest', 'bulkUploadPro', 'toolkit'].includes(menuId) ? (
+                                            <button
+                                                onClick={() => toggleSkipPin(menuId)}
+                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${skipPinMenus.includes(menuId) ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                                title={skipPinMenus.includes(menuId) ? "PIN akan di-skip untuk menu ini" : "Menu ini memerlukan PIN"}
+                                            >
+                                                {skipPinMenus.includes(menuId) ? <><FiUnlock className="w-3 h-3"/> Skipped</> : <><FiLock className="w-3 h-3"/> Locked</>}
+                                            </button>
+                                        ) : (
+                                            <span className="text-gray-300 text-xs">-</span>
+                                        )}
+                                    </div>
+                                    <div className="col-span-3 flex items-center justify-end gap-2">
                                         <div className="flex items-center bg-gray-100 rounded-lg p-0.5 mr-2">
                                             <button
                                                 onClick={() => moveUp(index)}

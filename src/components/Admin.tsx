@@ -28,7 +28,7 @@ import AdminStaffManager from './AdminStaffManager';
 interface AdminProps {
     showToast?: (message: string) => void;
     user?: { role: string; username: string } | null;
-    onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[]) => void;
+    onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[], skipPinMenus?: string[]) => void;
 }
 
 type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate';

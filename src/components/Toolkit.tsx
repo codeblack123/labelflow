@@ -20,6 +20,7 @@ import ToolkitPackingList from './ToolkitPackingList';
 
 interface ToolkitProps {
     showToast?: (message: string) => void;
+    skipPin?: boolean;
 }
 
 
@@ -50,9 +51,34 @@ const getColorClasses = (color) => {
     }
 };
 
-const Toolkit: React.FC<ToolkitProps> = ({ showToast }) => {
+const Toolkit: React.FC<ToolkitProps> = ({ showToast, skipPin }) => {
 
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        if (skipPin) return true;
+        if (typeof window !== 'undefined') {
+            try {
+                const skips = localStorage.getItem('app_skip_pin_menus');
+                if (skips) {
+                    const parsed = JSON.parse(skips);
+                    if (parsed.includes('toolkit')) return true;
+                }
+            } catch (e) {}
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        if (skipPin) {
+            setIsAuthenticated(true);
+            return;
+        }
+        try {
+            const skips = localStorage.getItem('app_skip_pin_menus');
+            if (skips && JSON.parse(skips).includes('toolkit')) {
+                setIsAuthenticated(true);
+            }
+        } catch (e) {}
+    }, [skipPin]);
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
     const [activeTool, setActiveTool] = useState<'awb-cleaner' | 'splitter' | 'label-splitter-v2' | 'label-splitter-v3' | 'label-splitter-v4' | 'label-splitter-v5' | 'extract-pesanan' | 'wms-cleaner' | 'ginee-processor' | 'verify' | 'pdf-merger' | 'packing-list' | 'orderan-kilat' | 'orderan-kilat-50k' | null>(null);
@@ -216,6 +242,18 @@ const Toolkit: React.FC<ToolkitProps> = ({ showToast }) => {
     };
 
     useEffect(() => {
+        if (skipPin) {
+            setIsAuthenticated(true);
+            return;
+        }
+        try {
+            const skips = localStorage.getItem('app_skip_pin_menus');
+            if (skips && JSON.parse(skips).includes('toolkit')) {
+                setIsAuthenticated(true);
+                return;
+            }
+        } catch (e) {}
+
         const auth = sessionStorage.getItem('toolkit_auth');
         const loginTime = sessionStorage.getItem('toolkit_login_time');
 
@@ -230,7 +268,7 @@ const Toolkit: React.FC<ToolkitProps> = ({ showToast }) => {
         } else {
             setIsAuthenticated(false);
         }
-    }, []);
+    }, [skipPin]);
 
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -290,7 +328,16 @@ const Toolkit: React.FC<ToolkitProps> = ({ showToast }) => {
         setPin('');
     };
 
-    if (!isAuthenticated) {
+    const isSkipped = skipPin || (() => {
+        try {
+            const skips = localStorage.getItem('app_skip_pin_menus');
+            return skips ? JSON.parse(skips).includes('toolkit') : false;
+        } catch (e) {
+            return false;
+        }
+    })();
+
+    if (!isAuthenticated && !isSkipped) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[65vh] py-10 animate-in fade-in zoom-in-95 duration-300">
                 <div className="w-full max-w-md bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white rounded-3xl border border-slate-800/80 shadow-2xl shadow-slate-900/40 p-8 sm:p-10 relative overflow-hidden">

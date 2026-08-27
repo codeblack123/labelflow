@@ -21,7 +21,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             heroTitleSuffix: "OPERATIONS",
             heroDesc: "Streamline your shipping labels, track stock in real-time, and eliminate fulfillment errors with our advanced customization platform.",
             getStarted: "Get Started Now",
-            featuresTitle: "Why Choose Label Customizer?",
+            featuresTitle: "Why Choose Label Flow?",
             solutionsTitle: "Integrated Solutions",
             pricingTitle: "Flexible Pricing",
             resourcesTitle: "Learning & Resources",
@@ -43,7 +43,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             heroTitleSuffix: "ANDA",
             heroDesc: "Sederhanakan label pengiriman, lacak stok secara real-time, dan hilangkan kesalahan pemenuhan dengan platform kustomisasi canggih kami.",
             getStarted: "Mulai Sekarang",
-            featuresTitle: "Mengapa Memilih Label Customizer?",
+            featuresTitle: "Mengapa Memilih Label Flow?",
             solutionsTitle: "Solusi Terintegrasi",
             pricingTitle: "Harga Fleksibel",
             resourcesTitle: "Pembelajaran & Sumber Daya",
@@ -80,7 +80,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                                 <FiActivity className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold text-white tracking-tight leading-tight">Label Customizer</h1>
+                                <h1 className="text-xl font-bold text-white tracking-tight leading-tight">Label Flow</h1>
                                 <p className="text-[0.7rem] text-blue-100 font-medium opacity-90 tracking-wide">WAREHOUSE SOLUTIONS</p>
                             </div>
                         </div>
@@ -256,7 +256,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
             <footer className="bg-white py-12 border-t border-gray-100">
                 <div className="container mx-auto px-6 text-center text-gray-500 text-sm">
-                    &copy; {new Date().getFullYear()} Label Customizer Warehouse Solutions. All rights reserved.
+                    &copy; {new Date().getFullYear()} Label Flow Warehouse Solutions. All rights reserved.
                 </div>
             </footer>
         </div>

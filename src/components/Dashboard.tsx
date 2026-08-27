@@ -81,7 +81,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     const [recentItems, setRecentItems] = useState<ProcessedItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedDate, setSelectedDate] = useState(getTodayDateString());
+    const [selectedDate, setSelectedDate] = useState(() => {
+        // Use local timezone (WIB) for initial date instead of UTC
+        const now = new Date();
+        const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        return localDate;
+    });
 
     // Track if user manually changed the date (to avoid auto-overriding their choice)
     const isManualDateSelection = useRef(false);
@@ -176,15 +181,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             ] = await Promise.all([
                 supabase
                     .from('scanned_items')
-                    .select('barcode, scan_date')
+                    .select('barcode, scan_date, tenant_id')
                     .eq('description', '[CANCEL] Camera Scan')
                     .eq('scan_date', dateToUse)
+                    .eq('tenant_id', activeTenantId)
                     .limit(1000),
                 supabase
                     .from('scanned_items')
-                    .select('barcode, scan_date')
+                    .select('barcode, scan_date, tenant_id')
                     .eq('description', '[PENDING] Camera Scan')
                     .eq('scan_date', dateToUse)
+                    .eq('tenant_id', activeTenantId)
                     .limit(1000)
             ]);
 
