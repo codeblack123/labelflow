@@ -8,8 +8,8 @@ import { supabase } from '../supabaseClient';
 const ALL_MENUS = [
     { id: 'dashboard', label: 'Dasbor' },
     { id: 'upload', label: 'Upload' },
-    { id: 'upload2', label: 'Upload Label' },
-    { id: 'uploadTest', label: 'Upload 2' },
+    { id: 'upload2', label: 'Upload 2' },
+    { id: 'uploadTest', label: 'Upload Label' },
     { id: 'history', label: 'Riwayat' },
     { id: 'bulkUpload', label: 'Upload Massal' },
     { id: 'bulkUploadTest', label: 'Upload Massal 2' },
@@ -94,11 +94,14 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
             return;
         }
 
+        let newHidden: string[];
         if (hiddenMenus.includes(menuId)) {
-            setHiddenMenus(hiddenMenus.filter(id => id !== menuId));
+            newHidden = hiddenMenus.filter(id => id !== menuId);
         } else {
-            setHiddenMenus([...hiddenMenus, menuId]);
+            newHidden = [...hiddenMenus, menuId];
         }
+        setHiddenMenus(newHidden);
+        if (onSettingsChanged) onSettingsChanged(menuOrder, newHidden);
     };
 
     const moveUp = (index: number) => {
@@ -108,6 +111,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
         newOrder[index - 1] = newOrder[index];
         newOrder[index] = temp;
         setMenuOrder(newOrder);
+        if (onSettingsChanged) onSettingsChanged(newOrder, hiddenMenus);
     };
 
     const moveDown = (index: number) => {
@@ -117,6 +121,7 @@ export const AdminMenuSettings: React.FC<AdminMenuSettingsProps> = ({ onSettings
         newOrder[index + 1] = newOrder[index];
         newOrder[index] = temp;
         setMenuOrder(newOrder);
+        if (onSettingsChanged) onSettingsChanged(newOrder, hiddenMenus);
     };
 
     return (
