@@ -10,7 +10,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if true;
       allow update: if false; // Documents are immutable once created
-      allow delete: if false; // Prevent accidental deletion from client
+      allow delete: if true; // Allow deletion from client (controlled by frontend logic)
     }
 
     // Deny all other collections by default

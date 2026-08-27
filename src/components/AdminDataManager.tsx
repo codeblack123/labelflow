@@ -3,7 +3,8 @@ import { FiTrash2, FiDatabase, FiRefreshCcw, FiCheckSquare, FiSquare, FiChevronL
 import { supabase } from '../supabaseClient';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import CustomTimePicker from './CustomTimePicker';
-
+import axios from 'axios';
+import { API_CONFIG } from '../constants';
 interface DataItem {
     id: string;
     [key: string]: any;
@@ -266,21 +267,20 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast }) => {
         console.log('[DELETE] IDs:', idsToDelete);
 
         try {
-            const { data, error, count } = await supabase
-                .from(activeTable)
-                .delete()
-                .in('id', idsToDelete)
-                .select();
+            // Bypass RLS silently failing by using backend Service Key endpoint
+            const response = await axios.post(`${API_CONFIG.BASE_URL}/admin/delete`, {
+                table: activeTable,
+                ids: idsToDelete
+            });
 
-            console.log('[DELETE] Response - data:', data, 'error:', error, 'count:', count);
+            console.log('[DELETE] Response:', response.data);
 
-            if (error) {
-                console.error('[DELETE] Supabase error:', error);
-                throw error;
+            if (!response.data.success) {
+                throw new Error(response.data.message || 'Unknown server error');
             }
 
             // Verify deletion was successful
-            const deletedCount = data?.length || idsToDelete.length;
+            const deletedCount = response.data.deleted || idsToDelete.length;
             showToast?.(`✓ ${deletedCount} data berhasil dihapus`);
             setDeleteModalOpen(false);
             setSelectedIds(new Set());

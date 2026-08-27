@@ -162,6 +162,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
         try {
             const dbMode = localStorage.getItem('db_mode') || 'cloud';
 
+            // 1. Delete from Cloud (Firebase) if in cloud mode
             if (dbMode === 'cloud') {
                 try {
                     // Import Firebase modules dynamically
@@ -200,30 +201,55 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                     
                     // Delete the Firestore document
                     await deleteDoc(docRef);
-                    
-                    // Cleanup local IndexedDB just in case
-                    try {
-                        await deleteHistoryFromLocal(record.id);
-                        if (record.excel_filename) {
-                            await deleteProcessedItemsByExcelFile(record.excel_filename);
-                        }
-                    } catch (localErr) {
-                        console.warn('[LOCAL] Deletion from IndexedDB failed:', localErr);
-                    }
-
-                    alert('✅ Riwayat berhasil dihapus (Cloud).');
-                    setSelectedRecord(null);
-                    setRefreshTrigger(t => t + 1);
-                    return; // Exit early since we handled cloud deletion
                 } catch (cloudErr: any) {
                     console.error('Error deleting cloud record:', cloudErr);
-                    alert(`❌ Gagal menghapus record cloud: ${cloudErr.message || 'Unknown error'}`);
-                    return;
+                    alert(`⚠️ Gagal menghapus file di Firebase Storage/Firestore (${cloudErr.message}). Akan tetap mencoba menghapus dari database utama (Supabase).`);
+                    // We REMOVED the "return;" here so it falls through and deletes from Supabase!
                 }
             }
 
+            // 2. Delete from Supabase (Backend API)
             await axios.delete(`${API_CONFIG.BASE_URL}/history/${record.id}?username=${encodeURIComponent(user?.username || '')}`);
 
+            // 2.5 Hapus ke akarnya (processed_items) langsung lewat Supabase client
+            try {
+                const dbMode = localStorage.getItem('db_mode') || 'cloud';
+                if (dbMode === 'cloud') {
+                    const { supabase } = await import('../supabaseClient');
+                    if (record.matched_awbs && Array.isArray(record.matched_awbs) && record.matched_awbs.length > 0) {
+                        // matched_awbs bisa berupa JSON string: '{"id_pesanan":"...","awb":"..."}'
+                        // Perlu di-parse dulu untuk dapat order_id yang benar
+                        const orderIds: string[] = [];
+                        for (const item of record.matched_awbs) {
+                            try {
+                                if (typeof item === 'string' && item.startsWith('{')) {
+                                    const parsed = JSON.parse(item);
+                                    if (parsed.id_pesanan) orderIds.push(String(parsed.id_pesanan));
+                                } else if (typeof item === 'object' && item !== null && (item as any).id_pesanan) {
+                                    orderIds.push(String((item as any).id_pesanan));
+                                } else {
+                                    orderIds.push(String(item));
+                                }
+                            } catch {
+                                orderIds.push(String(item));
+                            }
+                        }
+                        const BATCH_SIZE = 30;
+                        for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
+                            const chunk = orderIds.slice(i, i + BATCH_SIZE);
+                            const { error: cascadeErr } = await supabase.from('processed_items').delete().in('order_id', chunk);
+                            if (cascadeErr) console.error('[CASCADE] Failed to delete processed_items chunk:', cascadeErr);
+                        }
+                    } else if (record.excel_filename) {
+                        const { error: cascadeErr } = await supabase.from('processed_items').delete().eq('excel_filename', record.excel_filename);
+                        if (cascadeErr) console.error('[CASCADE] Failed to delete processed_items by excel:', cascadeErr);
+                    }
+                }
+            } catch (cascadeOuterErr) {
+                console.error('[CASCADE] Error during frontend cascade delete:', cascadeOuterErr);
+            }
+
+            // 3. Cleanup local IndexedDB just in case
             try {
                 await deleteHistoryFromLocal(record.id);
                 if (record.excel_filename) {
@@ -233,7 +259,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                 console.warn('[LOCAL] Deletion from IndexedDB failed:', localErr);
             }
 
-            alert('✅ Riwayat berhasil dihapus.');
+            alert('✅ Riwayat berhasil dihapus secara permanen.');
             setSelectedRecord(null);
             setRefreshTrigger(t => t + 1);
         } catch (error: any) {
