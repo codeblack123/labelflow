@@ -651,11 +651,11 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) 
                                 </div>
                             ) : (
                                 <button
-                                    onClick={() => setDeleteConfig({ isOpen: true, type: 'all', name: 'SELURUH DATABASE SKU' })}
+                                    onClick={() => setDeleteConfig({ isOpen: true, type: 'all', name: `SELURUH DATA SKU (${warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang Aktif'})` })}
                                     className="flex items-center gap-1.5 px-4 py-2 bg-white text-red-600 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-50 transition-all shadow-sm group"
                                 >
                                     <FiTrash2 className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                                    Nuclear Delete All
+                                    Clear All
                                 </button>
                             )}
                         </div>
@@ -892,10 +892,10 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) 
                 isOpen={deleteConfig.isOpen}
                 onClose={() => setDeleteConfig(prev => ({ ...prev, isOpen: false }))}
                 onConfirm={handleConfirmDelete}
-                title={deleteConfig.type === 'all' ? 'Nuclear Delete All' : 'Konfirmasi Hapus'}
+                title={deleteConfig.type === 'all' ? 'Clear All Data' : 'Konfirmasi Hapus'}
                 message={
                     deleteConfig.type === 'all'
-                        ? 'Apakah Anda benar-benar yakin ingin mengosongkan SELURUH database SKU?'
+                        ? `Apakah Anda benar-benar yakin ingin mengosongkan SELURUH data SKU khusus untuk ${warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang ini'}?`
                         : deleteConfig.type === 'bulk'
                             ? `Apakah Anda yakin ingin menghapus ${selectedIds.length} data terpilih?`
                             : undefined
