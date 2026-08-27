@@ -66,7 +66,11 @@ const SvgCardGraph = ({ type }: { type: 'blue' | 'emerald' | 'amber' | 'rose' })
     );
 };
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+    user?: any;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     const [todayStats, setTodayStats] = useState<DailyStats>({
         total_orders: 0,
         total_sent: 0,
@@ -127,22 +131,49 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         try {
             const dateToUse = selectedDate;
+            const activeTenantId = user?.tenant_id || user?.username;
+
+            let validFilenames: string[] = [];
+            if (activeTenantId) {
+                const { data: tenantHistory } = await supabase
+                    .from('label_process_history')
+                    .select('excel_filename')
+                    .eq('tenant_id', activeTenantId);
+                if (tenantHistory) {
+                    validFilenames = tenantHistory.map((h: any) => h.excel_filename);
+                }
+            }
+
+            let orderCount = 0;
+            let countError = null;
+            let recents = [];
+            let listError = null;
+
+            if (validFilenames.length > 0) {
+                const countQuery = await supabase
+                    .from('processed_items')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('date_processed', dateToUse)
+                    .in('excel_filename', validFilenames);
+                
+                orderCount = countQuery.count || 0;
+                countError = countQuery.error;
+
+                const listQuery = await supabase
+                    .from('processed_items')
+                    .select('*')
+                    .in('excel_filename', validFilenames)
+                    .order('processed_at', { ascending: false })
+                    .limit(50);
+                
+                recents = listQuery.data || [];
+                listError = listQuery.error;
+            }
 
             const [
-                { count: orderCount, error: countError },
-                { data: recents, error: listError },
                 { data: cancelData, error: cancelError },
                 { data: pendingData, error: pendingError }
             ] = await Promise.all([
-                supabase
-                    .from('processed_items')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('date_processed', dateToUse),
-                supabase
-                    .from('processed_items')
-                    .select('*')
-                    .order('processed_at', { ascending: false })
-                    .limit(50),
                 supabase
                     .from('scanned_items')
                     .select('barcode, scan_date')
@@ -210,8 +241,10 @@ const Dashboard: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchDashboardData();
-    }, [selectedDate]);
+        if (user) {
+            fetchDashboardData();
+        }
+    }, [selectedDate, user?.username, user?.tenant_id]);
 
     const filteredItems = recentItems.filter(item =>
         (item.order_id?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||

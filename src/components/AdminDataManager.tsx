@@ -12,11 +12,12 @@ interface DataItem {
 
 interface AdminDataManagerProps {
     showToast?: (message: string) => void;
+    user?: any;
 }
 
 const ITEMS_PER_PAGE = 50;
 
-const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast }) => {
+const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) => {
     const [activeTable, setActiveTable] = useState<'label_process_history' | 'processed_items'>('processed_items');
     const [data, setData] = useState<DataItem[]>([]);
     const [allData, setAllData] = useState<DataItem[]>([]);
@@ -56,6 +57,8 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast }) => {
     }, [secretBuffer]);
 
     useEffect(() => {
+        if (!user) return; // Wait until user is loaded
+
         // Reset filters when switching tables
         setFilterDate('');
         setFilterTimeFrom('');
@@ -64,7 +67,7 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast }) => {
         setTimeMatchMode('range');
 
         fetchData();
-    }, [activeTable]);
+    }, [activeTable, user?.username, user?.tenant_id]);
 
     // Filter and paginate data when filter or page changes
     useEffect(() => {
@@ -139,6 +142,29 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast }) => {
                 .from(activeTable)
                 .select('*');
 
+            const activeTenantId = user?.tenant_id || user?.username;
+            if (activeTenantId) {
+                if (activeTable === 'label_process_history') {
+                    query = query.eq('tenant_id', activeTenantId);
+                } else if (activeTable === 'processed_items') {
+                    // Fetch excel_filenames for this tenant first
+                    const { data: tenantHistory } = await supabase
+                        .from('label_process_history')
+                        .select('excel_filename')
+                        .eq('tenant_id', activeTenantId);
+                    
+                    let validFilenames: string[] = [];
+                    if (tenantHistory && tenantHistory.length > 0) {
+                        validFilenames = tenantHistory.map((h: any) => h.excel_filename);
+                        // Using `.in` to filter processed_items
+                        query = query.in('excel_filename', validFilenames);
+                    } else {
+                        // If no history exists, ensure it returns empty by setting an impossible condition
+                        query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+                    }
+                }
+            }
+
             // Apply Server-Side Date Filter
             if (filterDate) {
                 const dateColumn = activeTable === 'processed_items' ? 'date_processed' : 'created_at';
@@ -204,10 +230,35 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast }) => {
             // Use correct order column for each table
             const orderColumn = activeTable === 'processed_items' ? 'processed_at' : 'created_at';
 
-            // Fetch data with limit to avoid timeouts (descending order)
-            const { data: items, error } = await supabase
+            let query = supabase
                 .from(activeTable)
-                .select('*')
+                .select('*');
+
+            const activeTenantId = user?.tenant_id || user?.username;
+            if (activeTenantId) {
+                if (activeTable === 'label_process_history') {
+                    query = query.eq('tenant_id', activeTenantId);
+                } else if (activeTable === 'processed_items') {
+                    // Fetch excel_filenames for this tenant first
+                    const { data: tenantHistory } = await supabase
+                        .from('label_process_history')
+                        .select('excel_filename')
+                        .eq('tenant_id', activeTenantId);
+                    
+                    let validFilenames: string[] = [];
+                    if (tenantHistory && tenantHistory.length > 0) {
+                        validFilenames = tenantHistory.map((h: any) => h.excel_filename);
+                        // Using `.in` to filter processed_items
+                        query = query.in('excel_filename', validFilenames);
+                    } else {
+                        // If no history exists, ensure it returns empty by setting an impossible condition
+                        query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+                    }
+                }
+            }
+
+            // Fetch data with limit to avoid timeouts (descending order)
+            const { data: items, error } = await query
                 .order(orderColumn, { ascending: false })
                 .limit(5000);
 

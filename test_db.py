@@ -1,23 +1,21 @@
-import httpx
-import asyncio
+import requests
+import json
+import urllib.parse
+with open('.env', 'r') as f:
+    for line in f:
+        if line.startswith('VITE_SUPABASE_URL='):
+            SUPA_URL = line.strip().split('=')[1]
+        elif line.startswith('VITE_SUPABASE_ANON_KEY='):
+            SUPA_KEY = line.strip().split('=')[1]
 
-SUPABASE_URL = "https://lcexnrzqtyrixpuvifxg.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjZXhucnpxdHlyaXhwdXZpZnhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTIxNTgsImV4cCI6MjA4NTM2ODE1OH0.HVtoklr7Y--yiYWLgfDA1M2qjR_xt7ihtDZoOR4IP5U"
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}"
+url = f"{SUPA_URL}/rest/v1/processed_items?select=*&limit=1"
+headers = {
+    "apikey": SUPA_KEY,
+    "Authorization": f"Bearer {SUPA_KEY}"
 }
+res = requests.get(url, headers=headers)
+print("processed_items columns:", list(res.json()[0].keys()) if res.json() else "empty")
 
-async def check(table):
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(f"{SUPABASE_URL}/rest/v1/{table}?select=count", headers={**HEADERS, "Prefer": "count=exact"})
-        count = resp.headers.get("Content-Range", "0-0/0").split("/")[-1]
-        print(f"Table {table}: {count} rows")
-
-async def main():
-    tables = ["sku_mappings", "processed_items", "label_process_history", "sku_priority_bottom"]
-    for t in tables:
-        await check(t)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+url = f"{SUPA_URL}/rest/v1/label_process_history?select=*&limit=1"
+res = requests.get(url, headers=headers)
+print("label_process_history columns:", list(res.json()[0].keys()) if res.json() else "empty")

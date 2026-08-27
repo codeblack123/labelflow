@@ -3727,7 +3727,7 @@ const App: React.FC = () => {
             <main className={`mx-auto px-4 py-4 md:py-8 transition-all duration-300 ${['admin', 'toolkit', 'dashboard', 'upload', 'upload2', 'uploadTest', 'uploadTestMsku', 'uploadFlex', 'history', 'bulkUpload', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadTestMsku', 'bulkUploadPro'].includes(activeMenu) ? 'max-w-7xl' : 'max-w-3xl'
                 }`}>
                 {activeMenu === 'dashboard' ? (
-                    <Dashboard />
+                    <Dashboard user={user} />
                 ) : activeMenu === 'uploadFlex' ? (
                     <div className="space-y-8 animate-in fade-in duration-300">
                         {/* Header Section */}

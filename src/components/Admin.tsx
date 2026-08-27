@@ -352,7 +352,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                         <AdminMenuSettings onSettingsChanged={onMenuSettingsChanged} />
                     </div>
                     <div className={activeView === 'dataManager' ? 'block' : 'hidden'}>
-                        <AdminDataManager showToast={showToast} />
+                        <AdminDataManager showToast={showToast} user={user} />
                     </div>
                     <div className={activeView === 'networkDiagnostics' ? 'block' : 'hidden'}>
                         <AdminNetworkDiagnostics showToast={showToast} />
