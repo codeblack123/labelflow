@@ -703,8 +703,14 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                         <button
                                             onClick={() => {
                                                 const text = selectedRecord.matched_awbs?.map((item: any) => {
-                                                    if (typeof item === 'object') return `${item.awb}\t${item.id_pesanan}`;
-                                                    return item;
+                                                    let parsed = item;
+                                                    if (typeof item === 'string' && item.startsWith('{')) {
+                                                        try { parsed = JSON.parse(item); } catch(e) {}
+                                                    }
+                                                    const isObj = typeof parsed === 'object' && parsed !== null;
+                                                    const awb = isObj ? parsed.awb : parsed;
+                                                    const id_pesanan = isObj ? parsed.id_pesanan : '-';
+                                                    return `${id_pesanan}\t${awb}`;
                                                 }).join('\n') || '';
                                                 navigator.clipboard.writeText(text);
                                                 setIsCopiedModalData(true);
@@ -736,23 +742,31 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                     </div>
                                 </div>
                                 <div className="p-6 overflow-y-auto bg-gray-50/30">
-                                    <div className="grid grid-cols-2 gap-4 mb-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                        <div>AWB / Resi</div>
-                                        <div>ID Pesanan</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {selectedRecord.matched_awbs.map((item: any, idx: number) => {
-                                            const isObj = typeof item === 'object' && item !== null;
-                                            const awbStr = isObj ? item.awb : item;
-                                            const idPesanan = isObj ? item.id_pesanan : '-';
-                                            return (
-                                                <div key={idx} className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:border-emerald-200 transition-colors">
-                                                    <div className="font-mono text-sm text-gray-700 font-semibold">{awbStr}</div>
-                                                    <div className="font-mono text-sm text-gray-500">{idPesanan}</div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                <th className="p-3 rounded-tl-xl">ID Pesanan</th>
+                                                <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {selectedRecord.matched_awbs.map((item: any, idx: number) => {
+                                                let parsed = item;
+                                                if (typeof item === 'string' && item.startsWith('{')) {
+                                                    try { parsed = JSON.parse(item); } catch(e) {}
+                                                }
+                                                const isObj = typeof parsed === 'object' && parsed !== null;
+                                                const awbStr = isObj ? parsed.awb : parsed;
+                                                const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                return (
+                                                    <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
+                                                        <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
+                                                        <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>,
@@ -762,7 +776,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                     {(() => {
                         const isOwner = selectedRecord.username === user?.username;
                         const timeElapsed = Date.now() - new Date(selectedRecord.created_at).getTime();
-                        const timeRemainingMs = (60 * 60 * 1000) - timeElapsed;
+                        const timeRemainingMs = (120 * 60 * 1000) - timeElapsed;
                         const timeRemainingMins = Math.floor(timeRemainingMs / (60 * 1000));
                         const canUserDelete = isOwner && timeRemainingMins > 0;
 
