@@ -377,24 +377,29 @@ async def delete_all_sku_mappings(gudang_id: str):
         raise HTTPException(status_code=500, detail=f"Gagal mengosongkan database: {str(e)}")
 
 @app.delete("/settings/sku-mappings/{id}")
-async def delete_sku_mapping(id: str):
+async def delete_sku_mapping(id: str, gudang_id: str):
+    if not gudang_id:
+        raise HTTPException(status_code=400, detail="gudang_id wajib disertakan saat menghapus data")
     # Try deleting by custom_id first
     id = urllib.parse.unquote(id)
-    await supabase_fetch("DELETE", f"sku_mappings?custom_id=eq.{urllib.parse.quote(id)}")
+    await supabase_fetch("DELETE", f"sku_mappings?custom_id=eq.{urllib.parse.quote(id)}&gudang_id=eq.{gudang_id}")
     return {"success": True}
 
 class BulkDeleteSKUs(BaseModel):
     ids: list[str]
+    gudang_id: str
 
 @app.post("/settings/sku-mappings/bulk-delete")
 async def bulk_delete_sku_mappings(data: BulkDeleteSKUs):
     if not data.ids:
         return {"success": True, "count": 0}
+    if not data.gudang_id:
+        raise HTTPException(status_code=400, detail="gudang_id wajib disertakan saat menghapus data massal")
     
     # Supabase allows 'in' filter: column=in.(val1,val2,...)
     # Using quote and comma separation
     ids_str = ",".join([f'"{val}"' for val in data.ids])
-    endpoint = f"sku_mappings?custom_id=in.({urllib.parse.quote(ids_str)})"
+    endpoint = f"sku_mappings?custom_id=in.({urllib.parse.quote(ids_str)})&gudang_id=eq.{data.gudang_id}"
     await supabase_fetch("DELETE", endpoint)
     return {"success": True, "count": len(data.ids)}
 
