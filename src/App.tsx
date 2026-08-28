@@ -801,17 +801,34 @@ const App: React.FC = () => {
     const [showMatchedModal2, setShowMatchedModal2] = useState(false);
     const [isCopiedModalData, setIsCopiedModalData] = useState(false);
     const [showMatchedModalTest, setShowMatchedModalTest] = useState(false);
+    const [showMatchedModalBulkTest, setShowMatchedModalBulkTest] = useState(false);
+    const [showMatchedModalBulk, setShowMatchedModalBulk] = useState(false);
     const [undoHistoryId, setUndoHistoryId] = useState<string | null>(null);
 
     // Productivity Timer global enter key listener
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Enter') {
-                if (activeMenu === 'uploadTest') {
+                if (activeMenu === 'uploadTest' || activeMenu === 'uploadTestMsku') {
                     const btn = document.getElementById('btn-process-test') as HTMLButtonElement;
                     if (btn && !btn.disabled) btn.click();
                 } else if (activeMenu === 'bulkUploadTest' || activeMenu === 'bulkUploadTes' || activeMenu === 'bulkUploadTestMsku') {
                     const btn = document.getElementById('btn-process-bulk-test') as HTMLButtonElement;
+                    if (btn && !btn.disabled) btn.click();
+                } else if (activeMenu === 'upload') {
+                    const btn = document.getElementById('btn-process-main') as HTMLButtonElement;
+                    if (btn && !btn.disabled) btn.click();
+                } else if (activeMenu === 'upload2') {
+                    const btn = document.getElementById('btn-process-main-2') as HTMLButtonElement;
+                    if (btn && !btn.disabled) btn.click();
+                } else if (activeMenu === 'bulkUpload') {
+                    const btn = document.getElementById('btn-process-bulk') as HTMLButtonElement;
+                    if (btn && !btn.disabled) btn.click();
+                } else if (activeMenu === 'bulkUploadPro') {
+                    const btn = document.getElementById('btn-process-bulk-pro') as HTMLButtonElement;
+                    if (btn && !btn.disabled) btn.click();
+                } else if (activeMenu === 'uploadFlex') {
+                    const btn = document.getElementById('btn-process-flex') as HTMLButtonElement;
                     if (btn && !btn.disabled) btn.click();
                 }
             }
@@ -1622,6 +1639,9 @@ const App: React.FC = () => {
         if (includeSummary) {
             formData.append('include_summary', 'true');
         }
+        if (includeGlobalMsku) {
+            formData.append('include_global_msku', 'true');
+        }
 
         try {
             let currentProgress = 10;
@@ -1847,6 +1867,9 @@ const App: React.FC = () => {
         formData.append('priority_kembar', 'true');
         if (includeSummary) {
             formData.append('include_summary', 'true');
+        }
+        if (includeGlobalMsku) {
+            formData.append('include_global_msku', 'true');
         }
 
         try {
@@ -2145,6 +2168,9 @@ const App: React.FC = () => {
                 if (includeSummary) {
                     formData.append('include_summary', 'true');
                 }
+                if (includeGlobalMsku) {
+                    formData.append('include_global_msku', 'true');
+                }
 
                 const response = await axios.post(
                     `${API_CONFIG.BASE_URL}/process-labels-with-stats`,
@@ -2428,6 +2454,9 @@ const App: React.FC = () => {
             bulkPdfFiles.forEach(pdf => formData.append('pdf_files', pdf));
             if (includeSummary) {
                 formData.append('include_summary', 'true');
+            }
+            if (includeGlobalMsku) {
+                formData.append('include_global_msku', 'true');
             }
 
             const response = await axios.post(
@@ -3310,6 +3339,9 @@ const App: React.FC = () => {
             if (includeSummary) {
                 formData.append('include_summary', 'true');
             }
+            if (includeGlobalMsku) {
+                formData.append('include_global_msku', 'true');
+            }
 
             const response = await axios.post(
                 `${API_CONFIG.BASE_URL}/process-labels-with-stats`,
@@ -3971,6 +4003,13 @@ const App: React.FC = () => {
                                             type="text"
                                             value={pickerName}
                                             onChange={(e) => setPickerName(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const btn = document.getElementById('btn-process-flex') as HTMLButtonElement;
+                                                    if (btn && !btn.disabled) btn.click();
+                                                }
+                                            }}
                                             placeholder="Masukkan nama picker"
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-10"
                                             required
@@ -3987,6 +4026,7 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                                 <button
+                                    id="btn-process-flex"
                                     onClick={startFlexProcessing}
                                     disabled={!flexExcelFile || flexPdfFiles.length === 0}
                                     className={`px-10 py-3.5 rounded-xl font-bold text-lg tracking-wide transition-all duration-300 shadow-md transform hover:-translate-y-0.5 ${!flexExcelFile || flexPdfFiles.length === 0
@@ -4245,6 +4285,13 @@ const App: React.FC = () => {
                                             type="text"
                                             value={pickerName}
                                             onChange={(e) => setPickerName(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const btn = document.getElementById('btn-process-main') as HTMLButtonElement;
+                                                    if (btn && !btn.disabled) btn.click();
+                                                }
+                                            }}
                                             placeholder="Masukkan nama picker"
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-10"
                                             required
@@ -4261,6 +4308,7 @@ const App: React.FC = () => {
                                     </div>
                                     </div>
                                     <button
+                                        id="btn-process-main"
                                         onClick={startProcessing}
                                     disabled={!excelFile || pdfFiles.length === 0}
                                     className={`px-6 py-2.5 rounded-lg text-sm font-medium text-white ${(!excelFile || pdfFiles.length === 0)
@@ -5225,6 +5273,13 @@ const App: React.FC = () => {
                                             type="text"
                                             value={pickerName}
                                             onChange={(e) => setPickerName(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const btn = document.getElementById('btn-process-main-2') as HTMLButtonElement;
+                                                    if (btn && !btn.disabled) btn.click();
+                                                }
+                                            }}
                                             placeholder="Masukkan nama picker"
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-10"
                                             required
@@ -5241,6 +5296,7 @@ const App: React.FC = () => {
                                     </div>
                                         </div>
                                         <button
+                                            id="btn-process-main-2"
                                             onClick={startProcessing2}
                                             disabled={!excelFile2 || pdfFiles2.length === 0}
                                             className={`px-12 py-4 rounded-2xl text-lg font-black text-white transition-all shadow-2xl active:scale-95 ${(!excelFile2 || pdfFiles2.length === 0)
@@ -5611,6 +5667,13 @@ const App: React.FC = () => {
                                                 type="text"
                                                 value={pickerName}
                                                 onChange={(e) => setPickerName(e.target.value.toUpperCase())}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        if (pickerName.trim()) {
+                                                            startTestProcessing();
+                                                        }
+                                                    }
+                                                }}
                                                 placeholder="Masukkan nama picker..."
                                                 className="w-full px-5 py-3.5 bg-slate-50/60 border-2 border-slate-300 rounded-2xl text-sm font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all outline-none shadow-xs pr-12"
                                                 required
@@ -6284,40 +6347,109 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Process Button */}
-                        <button
-                            onClick={startBulkProcessing}
-                            disabled={!bulkExcelFile || bulkPdfFiles.length === 0 || bulkStatus === ProcessStatus.PROCESSING || (() => {
-                                const pdfNames = bulkPdfFiles.map(f => f.name);
-                                return pdfNames.length !== new Set(pdfNames).size;
-                            })()}
-                            className={`w-full py-4 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 ${!bulkExcelFile || bulkPdfFiles.length === 0 || (() => {
-                                const pdfNames = bulkPdfFiles.map(f => f.name);
-                                return pdfNames.length !== new Set(pdfNames).size;
-                            })()
-                                ? 'bg-blue-50 text-blue-400 border-2 border-dashed border-blue-200 cursor-not-allowed'
-                                : bulkStatus === ProcessStatus.PROCESSING
-                                    ? 'bg-blue-100 text-blue-600 cursor-wait'
-                                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
-                                }`}
+                        {/* MSKU Option Toggle Card */}
+                        <div 
+                            onClick={() => setIncludeGlobalMsku(!includeGlobalMsku)}
+                            className={`bg-white rounded-3xl border-2 ${includeGlobalMsku ? 'border-emerald-500/80 ring-4 ring-emerald-500/10 shadow-md' : 'border-slate-200/90 shadow-sm'} p-5 lg:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 hover:border-emerald-400 hover:shadow-lg cursor-pointer select-none group`}
                         >
-                            {bulkStatus === ProcessStatus.PROCESSING ? (
-                                <>
-                                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
-                                    Memproses...
-                                </>
-                            ) : !bulkExcelFile || bulkPdfFiles.length === 0 ? (
-                                <>
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                                    Lengkapi Kedua File
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                    Proses Batch #{bulkProcessedCount + 1}
-                                </>
-                            )}
-                        </button>
+                            <div className="flex items-start sm:items-center gap-4">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-transform group-hover:scale-105 flex-shrink-0 ${includeGlobalMsku ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                                    <FiLayers className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm sm:text-base font-extrabold text-slate-900 group-hover:text-emerald-600 transition-colors">
+                                            Sertakan Halaman Rekap Keseluruhan (+ Total MSKU)
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium mt-0.5 leading-relaxed">
+                                        Menambahkan halaman ekstra ringkasan total pesanan & rincian MSKU di bagian akhir PDF.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Right iOS Toggle Switch & Status Pill */}
+                            <div className="flex items-center gap-3 self-end sm:self-center flex-shrink-0">
+                                <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full transition-colors ${includeGlobalMsku ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                    {includeGlobalMsku ? '✓ AKTIF' : 'OFF'}
+                                </span>
+                                <div className={`w-14 h-8 rounded-full transition-colors duration-300 p-1 relative flex items-center ${includeGlobalMsku ? 'bg-emerald-600 shadow-md shadow-emerald-500/30' : 'bg-slate-300'}`}>
+                                    <div className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform duration-300 ${includeGlobalMsku ? 'translate-x-6' : 'translate-x-0'}`} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Control Panel */}
+                        <div className="mt-8 bg-white rounded-3xl border-2 border-slate-200 shadow-xl p-6 sm:p-8 lg:p-10 flex flex-col items-center">
+                            <div className="w-full max-w-lg flex flex-col items-center">
+                                <div className="mb-6 w-full">
+                                    <label className="block text-xs font-black text-slate-800 mb-2.5 uppercase tracking-wider">
+                                        Nama Picker / Operator <span className="text-rose-500">*</span>
+                                    </label>
+                                    <div className="relative w-full">
+                                        <input
+                                            type="text"
+                                            value={pickerName}
+                                            onChange={(e) => setPickerName(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const btn = document.getElementById('btn-process-bulk') as HTMLButtonElement;
+                                                    if (btn && !btn.disabled) btn.click();
+                                                }
+                                            }}
+                                            placeholder="Masukkan nama picker..."
+                                            className="w-full px-5 py-3.5 bg-slate-50/60 border-2 border-slate-300 rounded-2xl text-sm font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all outline-none shadow-xs pr-12"
+                                            required
+                                        />
+                                        {pickerName && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPickerName('')}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 bg-slate-200/60 hover:bg-slate-300/80 rounded-full p-1 transition-colors focus:outline-none"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <button
+                                    id="btn-process-bulk"
+                                    onClick={startBulkProcessing}
+                                    disabled={!pickerName.trim() || !bulkExcelFile || bulkPdfFiles.length === 0 || bulkStatus === ProcessStatus.PROCESSING || (() => {
+                                        const pdfNames = bulkPdfFiles.map(f => f.name);
+                                        return pdfNames.length !== new Set(pdfNames).size;
+                                    })()}
+                                    className={`w-full py-4 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 ${!pickerName.trim() || !bulkExcelFile || bulkPdfFiles.length === 0 || (() => {
+                                        const pdfNames = bulkPdfFiles.map(f => f.name);
+                                        return pdfNames.length !== new Set(pdfNames).size;
+                                    })()
+                                        ? 'bg-blue-50 text-blue-400 border-2 border-dashed border-blue-200 cursor-not-allowed'
+                                        : bulkStatus === ProcessStatus.PROCESSING
+                                            ? 'bg-blue-100 text-blue-600 cursor-wait'
+                                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
+                                        }`}
+                                >
+                                    {bulkStatus === ProcessStatus.PROCESSING ? (
+                                        <>
+                                            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                                            Memproses...
+                                        </>
+                                    ) : !pickerName.trim() || !bulkExcelFile || bulkPdfFiles.length === 0 ? (
+                                        <>
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                            Lengkapi File Excel & PDF
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                            Proses Batch #{bulkProcessedCount + 1}
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
 
                         {/* Verification Note */}
                         <p className="text-center text-gray-400 text-sm">Verifikasi format file sebelum memproses untuk hasil yang optimal</p>
@@ -6351,18 +6483,41 @@ const App: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
-                                <div className="mt-6 flex flex-col items-center gap-4">
-                                    <button
-                                        onClick={() => handleDownloadPackingList(
-                                            bulkExcelFile?.name || 'unknown.xlsx',
-                                            processingTime || new Date().toISOString(),
-                                            lastProcessedPdfName || undefined
-                                        )}
-                                        className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-200 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all transform hover:scale-[1.02]"
-                                    >
-                                        <FiClipboard className="w-5 h-5" />
-                                        Download Packing List Batch Ini
-                                    </button>
+                                <div className="mt-6 flex flex-col items-center gap-3 w-full">
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={resetBulkUpload}
+                                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                                        >
+                                            Proses Baru
+                                        </button>
+                                        <button
+                                            onClick={() => handleDownloadPackingList(
+                                                bulkExcelFile?.name || 'unknown.xlsx',
+                                                processingTime || new Date().toISOString(),
+                                                lastProcessedPdfName || (bulkPdfFiles.length > 0 ? bulkPdfFiles[0].name.replace(/\.pdf$/i, '') : undefined)
+                                            )}
+                                            className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium flex items-center gap-2"
+                                        >
+                                            <FiClipboard className="w-4 h-4" />
+                                            Packing List
+                                        </button>
+                                    </div>
+
+                                    {/* Matched Data Result */}
+                                    {bulkStats?.matched_with_awb && bulkStats.matched_with_awb.length > 0 && (
+                                        <div className="mt-2 flex justify-center w-full">
+                                            <button 
+                                                onClick={() => setShowMatchedModalBulk(true)}
+                                                className="w-full px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                                                </svg>
+                                                Lihat Data Resi & Pesanan Berhasil ({bulkStats.matched_with_awb.length})
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* Undo Button - Bulk */}
                                     {undoTimer > 0 && lastHistoryId && (
@@ -6373,22 +6528,90 @@ const App: React.FC = () => {
                                                 }
                                             }}
                                             disabled={isUndoing}
-                                            className="px-6 py-3 bg-red-100 text-red-700 hover:bg-red-200 rounded-xl text-sm font-bold flex items-center gap-2 transition-all transform hover:scale-[1.02]"
+                                            className="w-full mt-6 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all animate-in fade-in slide-in-from-top-2"
                                         >
                                             {isUndoing ? (
-                                                <span>Processing...</span>
+                                                <span>Membatalkan...</span>
                                             ) : (
                                                 <>
-                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                                                     </svg>
-                                                    Batalkan ({undoTimer}s)
+                                                    Batalkan & Hapus Permanen ({undoTimer}s)
                                                 </>
                                             )}
                                         </button>
                                     )}
                                 </div>
                             </div>
+                        )}
+
+                        {/* Modal Data Resi & Pesanan Bulk */}
+                        {showMatchedModalBulk && bulkStats?.matched_with_awb && createPortal(
+                            <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowMatchedModalBulk(false)}>
+                                <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                                    <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                        <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    const text = bulkStats.matched_with_awb?.map((item: any) => {
+                                                        let parsed = item;
+                                                        if (typeof item === 'string' && item.startsWith('{')) {
+                                                            try { parsed = JSON.parse(item); } catch(e) {}
+                                                        }
+                                                        const isObj = typeof parsed === 'object' && parsed !== null;
+                                                        const awb = isObj ? parsed.awb : parsed;
+                                                        const id_pesanan = isObj ? parsed.id_pesanan : '-';
+                                                        return `${id_pesanan}\t${awb}`;
+                                                    }).join('\n') || '';
+                                                    navigator.clipboard.writeText(text);
+                                                    showToast('Berhasil disalin ke clipboard');
+                                                }}
+                                                className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                </svg>
+                                                Copy Data
+                                            </button>
+                                            <button onClick={() => setShowMatchedModalBulk(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 overflow-y-auto bg-gray-50/30">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                    <th className="p-3 rounded-tl-xl">ID Pesanan</th>
+                                                    <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {bulkStats.matched_with_awb.map((item: any, idx: number) => {
+                                                    let parsed = item;
+                                                    if (typeof item === 'string' && item.startsWith('{')) {
+                                                        try { parsed = JSON.parse(item); } catch(e) {}
+                                                    }
+                                                    const isObj = typeof parsed === 'object' && parsed !== null;
+                                                    const awbStr = isObj ? parsed.awb : parsed;
+                                                    const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                    return (
+                                                        <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
+                                                            <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
+                                                            <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>,
+                            document.body
                         )}
 
                         {/* Feature Highlights */}
@@ -6651,6 +6874,13 @@ const App: React.FC = () => {
                                             type="text"
                                             value={pickerName}
                                             onChange={(e) => setPickerName(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const btn = document.getElementById('btn-process-bulk-test') as HTMLButtonElement;
+                                                    if (btn && !btn.disabled) btn.click();
+                                                }
+                                            }}
                                             placeholder="Masukkan nama picker..."
                                             className="w-full px-5 py-3.5 bg-slate-50/60 border-2 border-slate-300 rounded-2xl text-sm font-extrabold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 transition-all outline-none shadow-xs pr-12"
                                             required
@@ -6668,6 +6898,7 @@ const App: React.FC = () => {
                                 </div>
 
                                 <button
+                                    id="btn-process-bulk-test"
                                     onClick={startBulkTestProcessing}
                                     disabled={!pickerName.trim() || !bulkTestExcelFile || bulkTestPdfFiles.length === 0 || bulkTestStatus === ProcessStatus.PROCESSING || (() => {
                                         const pdfNames = bulkTestPdfFiles.map(f => f.name);
@@ -6727,49 +6958,140 @@ const App: React.FC = () => {
                                     <div className="mt-3 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
                                         <FiAlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                                         <div>
-                                            <p className="text-sm font-extrabold text-amber-700">⚠️ Excel Only ({bulkTestStats.unmatched_excel_count}) — Order tanpa label!</p>
+                                            <p className="text-sm font-semibold text-amber-700">⚠️ Excel Only ({bulkTestStats.unmatched_excel_count}) — Order tanpa label!</p>
                                             <p className="text-xs text-amber-600 mt-0.5">Ada <strong>{bulkTestStats.unmatched_excel_count}</strong> order di Excel yang tidak memiliki label PDF. Pastikan file PDF batch ini lengkap.</p>
                                         </div>
                                     </div>
                                 )}
-                                <div className="mt-6 flex flex-col items-center gap-4">
-                                    <button
-                                        onClick={() => handleDownloadPackingList(
-                                            bulkTestExcelFile?.name || 'unknown.xlsx',
-                                            processingTime || new Date().toISOString(),
-                                            lastProcessedPdfName || undefined
-                                        )}
-                                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-lg shadow-purple-500/20 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all transform hover:scale-[1.02] cursor-pointer"
-                                    >
-                                        <FiClipboard className="w-4.5 h-4.5" />
-                                        Download Packing List Batch Ini
-                                    </button>
+                                <div className="mt-6 flex flex-col items-center gap-3 w-full">
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={resetBulkTestUpload}
+                                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"
+                                        >
+                                            Proses Baru
+                                        </button>
+                                        <button
+                                            onClick={() => handleDownloadPackingList(
+                                                bulkTestExcelFile?.name || 'unknown.xlsx',
+                                                processingTime || new Date().toISOString(),
+                                                lastProcessedPdfName || (bulkTestPdfFiles.length > 0 ? bulkTestPdfFiles[0].name.replace(/\.pdf$/i, '') : undefined)
+                                            )}
+                                            className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium flex items-center gap-2"
+                                        >
+                                            <FiClipboard className="w-4 h-4" />
+                                            Packing List
+                                        </button>
+                                    </div>
+
+                                    {/* Matched Data Result */}
+                                    {bulkTestStats?.matched_with_awb && bulkTestStats.matched_with_awb.length > 0 && (
+                                        <div className="mt-2 flex justify-center w-full">
+                                            <button 
+                                                onClick={() => setShowMatchedModalBulkTest(true)}
+                                                className="w-full px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                                                </svg>
+                                                Lihat Data Resi & Pesanan Berhasil ({bulkTestStats.matched_with_awb.length})
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* Undo Button - Bulk */}
                                     {undoTimer > 0 && lastHistoryId && (
                                         <button
                                             onClick={() => {
-                                                if (window.confirm(`⚠️ PERHATIAN!\n\nApakah Anda yakin ingin MEMBATALKAN dan MENGHAPUS PERMANEN data batch ini?\n\nTindakan ini akan:\n✗ Menghapus data dari history\n✗ Menghapus data dari database\n✗ Tidak bisa dibatalkan\n\nWaktu tersisa: ${undoTimer} detik\n\nKlik OK untuk lanjut ke verifikasi password.`)) {
+                                                if (window.confirm(`⚠️ PERHATIAN!\n\nApakah Anda yakin ingin MEMBATALKAN dan MENGHAPUS PERMANEN data batch ini?\n\nTindakan ini akan:\n✗ Menghapus data dari history\n✗ Menghapus data dari database\n✗ Tidak bisa dibatalkan\n\nWaktu tersisa: ${undoTimer} detik\n\nKlik OK untuk lanjut ke verifikasi PIN.`)) {
                                                     setShowUndoPinModal(true);
                                                 }
                                             }}
                                             disabled={isUndoing}
-                                            className="px-6 py-3 bg-red-100 text-red-700 hover:bg-red-200 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-all transform hover:scale-[1.02] cursor-pointer"
+                                            className="w-full mt-6 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all animate-in fade-in slide-in-from-top-2"
                                         >
                                             {isUndoing ? (
-                                                <span>Processing...</span>
+                                                <span>Membatalkan...</span>
                                             ) : (
                                                 <>
-                                                    <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                                                     </svg>
-                                                    Batalkan Batch Ini ({undoTimer}s)
+                                                    Batalkan & Hapus Permanen ({undoTimer}s)
                                                 </>
                                             )}
                                         </button>
                                     )}
                                 </div>
                             </div>
+                        )}
+
+                        {/* Modal Data Resi & Pesanan Bulk Test */}
+                        {showMatchedModalBulkTest && bulkTestStats?.matched_with_awb && createPortal(
+                            <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowMatchedModalBulkTest(false)}>
+                                <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                                    <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                        <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    const text = bulkTestStats.matched_with_awb?.map((item: any) => {
+                                                        let parsed = item;
+                                                        if (typeof item === 'string' && item.startsWith('{')) {
+                                                            try { parsed = JSON.parse(item); } catch(e) {}
+                                                        }
+                                                        const isObj = typeof parsed === 'object' && parsed !== null;
+                                                        const awb = isObj ? parsed.awb : parsed;
+                                                        const id_pesanan = isObj ? parsed.id_pesanan : '-';
+                                                        return `${id_pesanan}\t${awb}`;
+                                                    }).join('\n') || '';
+                                                    navigator.clipboard.writeText(text);
+                                                    showToast('Berhasil disalin ke clipboard');
+                                                }}
+                                                className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                </svg>
+                                                Copy Data
+                                            </button>
+                                            <button onClick={() => setShowMatchedModalBulkTest(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 overflow-y-auto bg-gray-50/30">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                    <th className="p-3 rounded-tl-xl">ID Pesanan</th>
+                                                    <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {bulkTestStats.matched_with_awb.map((item: any, idx: number) => {
+                                                    let parsed = item;
+                                                    if (typeof item === 'string' && item.startsWith('{')) {
+                                                        try { parsed = JSON.parse(item); } catch(e) {}
+                                                    }
+                                                    const isObj = typeof parsed === 'object' && parsed !== null;
+                                                    const awbStr = isObj ? parsed.awb : parsed;
+                                                    const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                    return (
+                                                        <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
+                                                            <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
+                                                            <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>,
+                            document.body
                         )}
 
                         {/* Feature Highlights */}

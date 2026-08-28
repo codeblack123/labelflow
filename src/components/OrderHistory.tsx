@@ -345,7 +345,10 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                     exactMatch ? text.toLowerCase() === term : text.toLowerCase().includes(term);
                                 if ((searchCategory === 'all' || searchCategory === 'excel') && r.excel_filename && matchText(r.excel_filename)) return true;
                                 if ((searchCategory === 'all' || searchCategory === 'pdf') && r.pdf_filenames?.some(p => matchText(p))) return true;
-                                if ((searchCategory === 'all' || searchCategory === 'awb') && r.matched_awbs?.some(a => matchText(a))) return true;
+                                if ((searchCategory === 'all' || searchCategory === 'awb') && r.matched_awbs?.some((a: any) => {
+                                    const aStr = typeof a === 'object' && a !== null ? `${a.id_pesanan || ''} ${a.awb || ''}` : String(a);
+                                    return matchText(aStr);
+                                })) return true;
                                 return false;
                             });
                         }
@@ -475,7 +478,10 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                         const matchText = (text: string) =>
                             exactMatch ? text.toLowerCase() === searchLower : text.toLowerCase().includes(searchLower);
                         if ((searchCategory === 'all' || searchCategory === 'pdf') && record.pdf_filenames?.some((p: string) => matchText(p))) return true;
-                        if ((searchCategory === 'all' || searchCategory === 'awb') && record.matched_awbs?.some((a: string) => matchText(a))) return true;
+                        if ((searchCategory === 'all' || searchCategory === 'awb') && record.matched_awbs?.some((a: any) => {
+                            const aStr = typeof a === 'object' && a !== null ? `${a.id_pesanan || ''} ${a.awb || ''}` : String(a);
+                            return matchText(aStr);
+                        })) return true;
                         if (searchCategory === 'all' && record.excel_filename && matchText(record.excel_filename)) return true;
                         return false;
                     });

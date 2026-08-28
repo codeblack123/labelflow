@@ -1,4 +1,4 @@
-import sys
+6import sys
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
@@ -4077,8 +4077,20 @@ def fix_excel_numeric_ids(df):
     return df
 
 
+def clean_awb_display(awb):
+    """Bersihkan AWB/ID Pesanan untuk tampilan & penyimpanan: hapus prefix #, spasi leading/trailing, tapi PERTAHANKAN tanda hubung (-)."""
+    if not awb or pd.isna(awb):
+        return ""
+    val = str(awb).strip()
+    if val.startswith('#'):
+        val = val[1:].strip()
+    if val.upper() in ['NAN', 'NONE', 'NULL', '']:
+        return ""
+    return val
+
+
 def normalize_awb(awb):
-    """Normalize AWB: hapus spasi, dash, # prefix, dan uppercase."""
+    """Normalize AWB: hapus spasi, dash, # prefix, dan uppercase untuk matching."""
     if not awb or pd.isna(awb):
         return ""
     # Strip # prefix (used to preserve large numbers as text in Excel)
@@ -4142,6 +4154,7 @@ def extract_all_awb_candidates(text):
         # JNE
         r'\bJNE\d{10,18}\b',             # JNE prefix
         r'\bJNAP[\-]?\d{8,18}\b',         # JNAP (JNE via Lazada, contoh: JNAP-0251117042)
+        r'\bJNEB[\-]?\d{8,18}\b',         # JNEB (JNE via Lazada/TikTok, contoh: JNEB-1170327515)
         r'\b\d{10}[A-Z]{2,4}\d{4,6}\b',  # Format JNE lama (10digit + huruf + digit)
         r'\bCM\d{8,18}\b',               # CM prefix (User requested)
         r'\b11\d{10,18}\b',              # 11 prefix (User requested)
@@ -5348,23 +5361,27 @@ async def extract_matched_order_ids(
 
         excel_awbs = set()
         id_to_awb_mapping = {}
+        awb_norm_to_id = {}
         
         for _, row in df.iterrows():
             if has_id_pesanan:
                 id_pesanan_val = row['ID Pesanan']
                 if pd.notna(id_pesanan_val):
-                    id_pesanan_norm = str(id_pesanan_val).strip()
+                    id_pesanan_norm = normalize_awb(id_pesanan_val)
+                    id_pesanan_display = clean_awb_display(id_pesanan_val)
                     if id_pesanan_norm:
                         excel_awbs.add(id_pesanan_norm)
                         if has_awb:
                             awb_val = row['AWB/No. Tracking']
-                            if pd.notna(awb_val) and str(awb_val).strip():
-                                awb_norm = str(awb_val).strip()
-                                excel_awbs.add(awb_norm)
-                                id_to_awb_mapping[id_pesanan_norm] = awb_norm
+                            if pd.notna(awb_val):
+                                awb_norm = normalize_awb(awb_val)
+                                awb_display = clean_awb_display(awb_val)
+                                if awb_norm:
+                                    excel_awbs.add(awb_norm)
+                                    id_to_awb_mapping[id_pesanan_norm] = awb_display
+                                    awb_norm_to_id[awb_norm] = id_pesanan_display
+                                    awb_norm_to_id[normalize_awb(awb_display)] = id_pesanan_display
                                 
-        awb_to_id_mapping = {v: k for k, v in id_to_awb_mapping.items()}
-        
         matched_ids = set()
         
         for pdf in pdf_files:
@@ -5378,8 +5395,8 @@ async def extract_matched_order_ids(
                 if matched_awb:
                     if matched_awb in id_to_awb_mapping:
                         matched_ids.add(matched_awb) # it was an ID Pesanan
-                    elif matched_awb in awb_to_id_mapping:
-                        matched_ids.add(awb_to_id_mapping[matched_awb])
+                    elif matched_awb in awb_norm_to_id:
+                        matched_ids.add(awb_norm_to_id[matched_awb])
                         
         return {"ids": list(matched_ids)}
     except Exception as e:
@@ -5491,20 +5508,25 @@ async def process_labels(
         excel_awbs = set()  # Semua keys yang bisa digunakan untuk matching (ID + AWB)
         excel_primary_ids = set()  # HANYA identifier utama per order (untuk statistik)
         excel_awbs_raw_set = set() # Untuk menyimpan semua AWB raw yang ada di excel
-        id_to_awb_mapping = {}  # Mapping ID Pesanan -> AWB/No. Tracking
+        id_to_awb_mapping = {}  # Mapping ID Pesanan -> AWB/No. Tracking (dengan tanda strip asli jika ada)
+        awb_norm_to_display = {} # Mapping normalized AWB -> original formatted AWB
+        id_norm_to_display = {} # Mapping normalized ID -> original formatted ID
         awb_to_catatan = {}  # Mapping ID/AWB -> Catatan Pembeli (untuk JX)
         
         for _, row in df.iterrows():
             identifier = None
             awb_value = None
+            awb_display = None
             
-            # Ambil AWB/No. Tracking value (untuk disimpan ke Supabase)
+            # Ambil AWB/No. Tracking value (untuk disimpan ke Supabase & display)
             if has_awb:
                 awb_raw = row.get('AWB/No. Tracking', '')
+                awb_display = clean_awb_display(awb_raw)
                 awb_norm = normalize_awb(awb_raw)
                 if awb_norm and awb_norm not in ['NAN', 'NONE', 'NULL', '']:
                     awb_value = awb_norm
-                    excel_awbs_raw_set.add(awb_value)
+                    awb_norm_to_display[awb_norm] = awb_display
+                    excel_awbs_raw_set.add(awb_display if awb_display else awb_value)
             
             # Ambil Catatan Pembeli (untuk JX labels)
             catatan_pembeli = ''
@@ -5519,12 +5541,15 @@ async def process_labels(
             # Prioritas 1: ID Pesanan (untuk validasi/matching) - KECUALI BLIBLI
             if has_id_pesanan and not is_blibli:
                 id_pesanan = row.get('ID Pesanan', '')
+                id_pesanan_display = clean_awb_display(id_pesanan)
                 id_pesanan_norm = normalize_awb(id_pesanan)
                 if id_pesanan_norm and id_pesanan_norm not in ['NAN', 'NONE', 'NULL', '']:
                     identifier = id_pesanan_norm
-                    # Simpan mapping ID Pesanan -> AWB
-                    if awb_value:
-                        id_to_awb_mapping[identifier] = awb_value
+                    id_norm_to_display[id_pesanan_norm] = id_pesanan_display
+                    # Simpan mapping ID Pesanan -> AWB (dengan format strip asli)
+                    if awb_display:
+                        id_to_awb_mapping[identifier] = awb_display
+                        id_to_awb_mapping[id_pesanan_display] = awb_display
                     # Simpan Catatan Pembeli untuk semua label
                     if catatan_pembeli:
                         awb_to_catatan[identifier] = catatan_pembeli
@@ -5532,6 +5557,8 @@ async def process_labels(
             # Prioritas 2: AWB/No. Tracking (jika ID Pesanan kosong)
             if not identifier and awb_value:
                 identifier = awb_value
+                if awb_display:
+                    awb_norm_to_display[awb_value] = awb_display
                 # Simpan Catatan Pembeli untuk semua label
                 if catatan_pembeli:
                     awb_to_catatan[identifier] = catatan_pembeli
@@ -5725,7 +5752,10 @@ async def process_labels(
         
         # Create reverse mapping for duplicate checking
         # awb_to_id_mapping: AWB -> ID Pesanan
-        awb_to_id_mapping = {v: k for k, v in id_to_awb_mapping.items()}
+        awb_to_id_mapping = {}
+        for id_k, awb_v in id_to_awb_mapping.items():
+            awb_to_id_mapping[awb_v] = id_k
+            awb_to_id_mapping[normalize_awb(awb_v)] = id_k
         
         print(f"[DEBUG] Catatan Pembeli untuk JX: {len(awb_to_catatan)} entries")
         print(f"[DEBUG] Total AWB dari Excel: {len(excel_awbs)}")
@@ -6624,28 +6654,28 @@ async def process_labels(
             
             # Scenario 1: Key IS ID Pesanan
             if key in id_to_awb_mapping:
-                real_id = key
+                norm_id = normalize_awb(key)
+                real_id = id_norm_to_display.get(norm_id, key)
                 real_awb = id_to_awb_mapping[key]
             
             # Scenario 2: Key IS AWB (Reverse lookup)
             elif key in awb_to_id_mapping:
-                real_id = awb_to_id_mapping[key]
-                real_awb = key # The key itself is the AWB
+                mapped_id = awb_to_id_mapping[key]
+                norm_id = normalize_awb(mapped_id)
+                real_id = id_norm_to_display.get(norm_id, mapped_id)
+                real_awb = id_to_awb_mapping.get(mapped_id) or awb_norm_to_display.get(normalize_awb(key), key)
             
             # Scenario 3: Key matches but isolated (maybe logic edge case)
             else:
-                # If identifier was ID but had no AWB?
-                # Check if it's in awb_to_items keys?
-                if key in awb_to_items:
-                    # It's a valid key pointing to items.
-                    # Assume it's ID if not in reverse map?
-                    real_id = key
-                    real_awb = ''
+                norm_key = normalize_awb(key)
+                if norm_key in awb_to_items or key in awb_to_items:
+                    real_id = id_norm_to_display.get(norm_key, key)
+                    real_awb = awb_norm_to_display.get(norm_key, '')
             
             if real_id and real_id not in processed_ids:
                 matched_with_awb.append({
                     'id_pesanan': real_id,
-                    'awb': real_awb
+                    'awb': real_awb or ''
                 })
                 processed_ids.add(real_id)
         
@@ -6653,8 +6683,9 @@ async def process_labels(
         unmatched_excel_with_awb = []
         for id_pesanan in unmatched_excel:
             awb = id_to_awb_mapping.get(id_pesanan, '')
+            norm_id = normalize_awb(id_pesanan)
             unmatched_excel_with_awb.append({
-                'id_pesanan': id_pesanan,
+                'id_pesanan': id_norm_to_display.get(norm_id, id_pesanan),
                 'awb': awb
             })
         
@@ -6807,20 +6838,25 @@ async def process_labels_with_stats(
         excel_awbs = set()  # Semua keys yang bisa digunakan untuk matching (ID + AWB)
         excel_primary_ids = set()  # HANYA identifier utama per order (untuk statistik)
         excel_awbs_raw_set = set() # Untuk menyimpan semua AWB raw yang ada di excel
-        id_to_awb_mapping = {}  # Mapping ID Pesanan -> AWB/No. Tracking
+        id_to_awb_mapping = {}  # Mapping ID Pesanan -> AWB/No. Tracking (dengan tanda strip asli jika ada)
+        awb_norm_to_display = {} # Mapping normalized AWB -> original formatted AWB
+        id_norm_to_display = {} # Mapping normalized ID -> original formatted ID
         awb_to_catatan = {}  # Mapping ID/AWB -> Catatan Pembeli (untuk JX)
         
         for _, row in df.iterrows():
             identifier = None
             awb_value = None
+            awb_display = None
             
-            # Ambil AWB/No. Tracking value (untuk disimpan ke Supabase)
+            # Ambil AWB/No. Tracking value (untuk disimpan ke Supabase & display)
             if has_awb:
                 awb_raw = row.get('AWB/No. Tracking', '')
+                awb_display = clean_awb_display(awb_raw)
                 awb_norm = normalize_awb(awb_raw)
                 if awb_norm and awb_norm not in ['NAN', 'NONE', 'NULL', '']:
                     awb_value = awb_norm
-                    excel_awbs_raw_set.add(awb_value)
+                    awb_norm_to_display[awb_norm] = awb_display
+                    excel_awbs_raw_set.add(awb_display if awb_display else awb_value)
             
             # Ambil Catatan Pembeli (untuk JX labels)
             catatan_pembeli = ''
@@ -6835,12 +6871,15 @@ async def process_labels_with_stats(
             # Prioritas 1: ID Pesanan (untuk validasi/matching) - KECUALI BLIBLI
             if has_id_pesanan and not is_blibli:
                 id_pesanan = row.get('ID Pesanan', '')
+                id_pesanan_display = clean_awb_display(id_pesanan)
                 id_pesanan_norm = normalize_awb(id_pesanan)
                 if id_pesanan_norm and id_pesanan_norm not in ['NAN', 'NONE', 'NULL', '']:
                     identifier = id_pesanan_norm
-                    # Simpan mapping ID Pesanan -> AWB
-                    if awb_value:
-                        id_to_awb_mapping[identifier] = awb_value
+                    id_norm_to_display[id_pesanan_norm] = id_pesanan_display
+                    # Simpan mapping ID Pesanan -> AWB (dengan format strip asli)
+                    if awb_display:
+                        id_to_awb_mapping[identifier] = awb_display
+                        id_to_awb_mapping[id_pesanan_display] = awb_display
                     # Simpan Catatan Pembeli untuk semua label
                     if catatan_pembeli:
                         awb_to_catatan[identifier] = catatan_pembeli
@@ -6848,6 +6887,8 @@ async def process_labels_with_stats(
             # Prioritas 2: AWB/No. Tracking (jika ID Pesanan kosong)
             if not identifier and awb_value:
                 identifier = awb_value
+                if awb_display:
+                    awb_norm_to_display[awb_value] = awb_display
                 # Simpan Catatan Pembeli untuk semua label
                 if catatan_pembeli:
                     awb_to_catatan[identifier] = catatan_pembeli
@@ -7041,7 +7082,10 @@ async def process_labels_with_stats(
         
         # Create reverse mapping for duplicate checking
         # awb_to_id_mapping: AWB -> ID Pesanan
-        awb_to_id_mapping = {v: k for k, v in id_to_awb_mapping.items()}
+        awb_to_id_mapping = {}
+        for id_k, awb_v in id_to_awb_mapping.items():
+            awb_to_id_mapping[awb_v] = id_k
+            awb_to_id_mapping[normalize_awb(awb_v)] = id_k
         
         print(f"[DEBUG] Catatan Pembeli untuk JX: {len(awb_to_catatan)} entries")
         print(f"[DEBUG] Total AWB dari Excel: {len(excel_awbs)}")
@@ -7923,28 +7967,28 @@ async def process_labels_with_stats(
             
             # Scenario 1: Key IS ID Pesanan
             if key in id_to_awb_mapping:
-                real_id = key
+                norm_id = normalize_awb(key)
+                real_id = id_norm_to_display.get(norm_id, key)
                 real_awb = id_to_awb_mapping[key]
             
             # Scenario 2: Key IS AWB (Reverse lookup)
             elif key in awb_to_id_mapping:
-                real_id = awb_to_id_mapping[key]
-                real_awb = key # The key itself is the AWB
+                mapped_id = awb_to_id_mapping[key]
+                norm_id = normalize_awb(mapped_id)
+                real_id = id_norm_to_display.get(norm_id, mapped_id)
+                real_awb = id_to_awb_mapping.get(mapped_id) or awb_norm_to_display.get(normalize_awb(key), key)
             
             # Scenario 3: Key matches but isolated (maybe logic edge case)
             else:
-                # If identifier was ID but had no AWB?
-                # Check if it's in awb_to_items keys?
-                if key in awb_to_items:
-                    # It's a valid key pointing to items.
-                    # Assume it's ID if not in reverse map?
-                    real_id = key
-                    real_awb = ''
+                norm_key = normalize_awb(key)
+                if norm_key in awb_to_items or key in awb_to_items:
+                    real_id = id_norm_to_display.get(norm_key, key)
+                    real_awb = awb_norm_to_display.get(norm_key, '')
             
             if real_id and real_id not in processed_ids:
                 matched_with_awb.append({
                     'id_pesanan': real_id,
-                    'awb': real_awb
+                    'awb': real_awb or ''
                 })
                 processed_ids.add(real_id)
         
@@ -7952,8 +7996,9 @@ async def process_labels_with_stats(
         unmatched_excel_with_awb = []
         for id_pesanan in unmatched_excel:
             awb = id_to_awb_mapping.get(id_pesanan, '')
+            norm_id = normalize_awb(id_pesanan)
             unmatched_excel_with_awb.append({
-                'id_pesanan': id_pesanan,
+                'id_pesanan': id_norm_to_display.get(norm_id, id_pesanan),
                 'awb': awb
             })
         
