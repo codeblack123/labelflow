@@ -740,7 +740,7 @@ const App: React.FC = () => {
 
         const fetchSabotage = async () => {
             try {
-                const { data } = await supabase.from('sabotage_config').select('*').eq('username', user.username).single();
+                const { data } = await supabase.from('sabotage_config').select('*').eq('username', user.username).maybeSingle();
                 if (data) setSabotageConfig(data);
             } catch (e) {}
         };
@@ -866,15 +866,45 @@ const App: React.FC = () => {
         if (!lastHistoryId) return;
 
         // Stop Timer
+        const currentHistId = lastHistoryId;
         setUndoTimer(0);
         setIsUndoing(true);
 
         try {
-            const response = await fetch(`${API_CONFIG.BASE_URL}/history/${lastHistoryId}`, {
-                method: 'DELETE',
-            });
+            // 1. Ambil detail history sebelum dihapus agar bisa membersihkan processed_items
+            let excelName = '';
+            try {
+                const { data: histData } = await supabase
+                    .from('label_process_history')
+                    .select('excel_filename')
+                    .eq('id', currentHistId)
+                    .maybeSingle();
+                if (histData && histData.excel_filename) {
+                    excelName = histData.excel_filename;
+                }
+            } catch (e) {}
 
-            if (!response.ok) throw new Error('Gagal membatalkan proses');
+            // 2. Hapus lewat backend (hapus backup files + database)
+            try {
+                await fetch(`${API_CONFIG.BASE_URL}/history/${currentHistId}`, {
+                    method: 'DELETE',
+                });
+            } catch (backendErr) {
+                console.warn('[UNDO] Backend delete endpoint failed or not running:', backendErr);
+            }
+
+            // 3. Fallback direct cascade delete via Supabase Client
+            try {
+                if (excelName) {
+                    await supabase.from('processed_items').delete().eq('excel_filename', excelName);
+                    await deleteProcessedItemsByExcelFile(excelName);
+                    await deleteHistoryByExcelFile(excelName);
+                }
+                await supabase.from('label_process_history').delete().eq('id', currentHistId);
+                await deleteHistoryFromLocal(currentHistId);
+            } catch (directErr) {
+                console.warn('[UNDO] Direct cascade delete error:', directErr);
+            }
 
             showToast('✓ Proses dibatalkan. Data & backup folder dihapus.');
 
@@ -890,6 +920,10 @@ const App: React.FC = () => {
             } else if (activeMenu === 'bulkUpload') {
                 setBulkProcessedCount(prev => Math.max(0, prev - 1));
                 setBulkStats(null);
+            } else if (activeMenu === 'bulkUploadTes' || activeMenu === 'bulkUploadTest' || activeMenu === 'bulkUploadTestMsku') {
+                setBulkTestProcessedCount(prev => Math.max(0, prev - 1));
+                setBulkTestStatus(ProcessStatus.IDLE);
+                setBulkTestPdfFiles([]);
             } else if (activeMenu === 'bulkUploadPro') {
                 setBulkProProcessedCount(prev => Math.max(0, prev - 1));
                 setBulkProStats(null);
@@ -903,6 +937,7 @@ const App: React.FC = () => {
             setShowUndoPinModal(false);
             setUndoPinInput('');
             setUndoPinError('');
+            setHistoryKey(prev => prev + 1);
         }
     };
 
@@ -1917,10 +1952,40 @@ const App: React.FC = () => {
 
     const handleUndo2 = async () => {
         if (!lastHistoryId2) return;
+        const currentHistId = lastHistoryId2;
         setUndoTimer2(0);
         setIsUndoing2(true);
         try {
-            await axios.delete(`${API_CONFIG.BASE_URL}/history/${lastHistoryId2}`);
+            let excelName = '';
+            try {
+                const { data: histData } = await supabase
+                    .from('label_process_history')
+                    .select('excel_filename')
+                    .eq('id', currentHistId)
+                    .maybeSingle();
+                if (histData && histData.excel_filename) {
+                    excelName = histData.excel_filename;
+                }
+            } catch (e) {}
+
+            try {
+                await axios.delete(`${API_CONFIG.BASE_URL}/history/${currentHistId}`);
+            } catch (backendErr) {
+                console.warn('[UNDO 2] Backend delete failed:', backendErr);
+            }
+
+            try {
+                if (excelName) {
+                    await supabase.from('processed_items').delete().eq('excel_filename', excelName);
+                    await deleteProcessedItemsByExcelFile(excelName);
+                    await deleteHistoryByExcelFile(excelName);
+                }
+                await supabase.from('label_process_history').delete().eq('id', currentHistId);
+                await deleteHistoryFromLocal(currentHistId);
+            } catch (directErr) {
+                console.warn('[UNDO 2] Direct cascade delete error:', directErr);
+            }
+
             showToast('✓ Proses (Upload Kembar) dibatalkan.');
             setIsLocked2(false);
             setStatus2(ProcessStatus.IDLE);
@@ -1930,6 +1995,7 @@ const App: React.FC = () => {
         } finally {
             setIsUndoing2(false);
             setLastHistoryId2(null);
+            setHistoryKey(prev => prev + 1);
         }
     };
 
@@ -2740,15 +2806,50 @@ const App: React.FC = () => {
 
     const handleTestUndo = async () => {
         if (!testLastHistoryId) return;
+        const currentHistId = testLastHistoryId;
         setTestIsUndoing(true);
         try {
-            const { error: historyError } = await supabase.from('label_process_history').delete().eq('id', testLastHistoryId);
-            if (historyError) throw historyError;
+            let excelName = testExcelFile?.name || '';
+            if (!excelName) {
+                try {
+                    const { data: histData } = await supabase
+                        .from('label_process_history')
+                        .select('excel_filename')
+                        .eq('id', currentHistId)
+                        .maybeSingle();
+                    if (histData && histData.excel_filename) {
+                        excelName = histData.excel_filename;
+                    }
+                } catch (e) {}
+            }
 
-            if (testProcessStats && testExcelFile) {
-                const awbsToDelete = [...testProcessStats.matched_awbs, ...testProcessStats.continuation_pages.map(c => c.awb)];
-                const { error: itemsError } = await supabase.from('processed_items').delete().in('order_id', awbsToDelete);
-                if (itemsError) throw itemsError;
+            // 1. Delete via backend (handles backup files and server-side deletion)
+            try {
+                await axios.delete(`${API_CONFIG.BASE_URL}/history/${currentHistId}`);
+            } catch (backendErr) {
+                console.warn('[TEST UNDO] Backend delete failed:', backendErr);
+            }
+
+            // 2. Cascade delete from Supabase Client
+            try {
+                if (excelName) {
+                    await supabase.from('processed_items').delete().eq('excel_filename', excelName);
+                    await deleteProcessedItemsByExcelFile(excelName);
+                    await deleteHistoryByExcelFile(excelName);
+                }
+
+                if (testProcessStats) {
+                    const awbsToDelete = [...testProcessStats.matched_awbs, ...testProcessStats.continuation_pages.map(c => c.awb)];
+                    if (awbsToDelete.length > 0) {
+                        await supabase.from('processed_items').delete().in('order_id', awbsToDelete);
+                        await supabase.from('processed_items').delete().in('awb', awbsToDelete);
+                    }
+                }
+
+                await supabase.from('label_process_history').delete().eq('id', currentHistId);
+                await deleteHistoryFromLocal(currentHistId);
+            } catch (directErr) {
+                console.warn('[TEST UNDO] Direct cascade delete error:', directErr);
             }
 
             setTestUndoTimer(0);
