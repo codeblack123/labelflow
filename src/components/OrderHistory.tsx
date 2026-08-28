@@ -216,17 +216,21 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                 const dbMode = localStorage.getItem('db_mode') || 'cloud';
                 if (dbMode === 'cloud') {
                     const { supabase } = await import('../supabaseClient');
+                    if (record.excel_filename) {
+                        const { error: cascadeErr } = await supabase.from('processed_items').delete().eq('excel_filename', record.excel_filename);
+                        if (cascadeErr) console.error('[CASCADE] Failed to delete processed_items by excel:', cascadeErr);
+                    }
                     if (record.matched_awbs && Array.isArray(record.matched_awbs) && record.matched_awbs.length > 0) {
-                        // matched_awbs bisa berupa JSON string: '{"id_pesanan":"...","awb":"..."}'
-                        // Perlu di-parse dulu untuk dapat order_id yang benar
                         const orderIds: string[] = [];
                         for (const item of record.matched_awbs) {
                             try {
                                 if (typeof item === 'string' && item.startsWith('{')) {
                                     const parsed = JSON.parse(item);
                                     if (parsed.id_pesanan) orderIds.push(String(parsed.id_pesanan));
-                                } else if (typeof item === 'object' && item !== null && (item as any).id_pesanan) {
-                                    orderIds.push(String((item as any).id_pesanan));
+                                    if (parsed.awb) orderIds.push(String(parsed.awb));
+                                } else if (typeof item === 'object' && item !== null) {
+                                    if ((item as any).id_pesanan) orderIds.push(String((item as any).id_pesanan));
+                                    if ((item as any).awb) orderIds.push(String((item as any).awb));
                                 } else {
                                     orderIds.push(String(item));
                                 }
@@ -234,15 +238,12 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                 orderIds.push(String(item));
                             }
                         }
-                        const BATCH_SIZE = 30;
+                        const BATCH_SIZE = 50;
                         for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
                             const chunk = orderIds.slice(i, i + BATCH_SIZE);
-                            const { error: cascadeErr } = await supabase.from('processed_items').delete().in('order_id', chunk);
-                            if (cascadeErr) console.error('[CASCADE] Failed to delete processed_items chunk:', cascadeErr);
+                            await supabase.from('processed_items').delete().in('order_id', chunk);
+                            await supabase.from('processed_items').delete().in('awb', chunk);
                         }
-                    } else if (record.excel_filename) {
-                        const { error: cascadeErr } = await supabase.from('processed_items').delete().eq('excel_filename', record.excel_filename);
-                        if (cascadeErr) console.error('[CASCADE] Failed to delete processed_items by excel:', cascadeErr);
                     }
                 }
             } catch (cascadeOuterErr) {
@@ -519,18 +520,70 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
 
         setDeleteLoading(true);
         try {
-            const response = await fetch(`${API_CONFIG.BASE_URL}/history/${record.id}`, {
-                method: 'DELETE',
-            });
+            // 1. Direct Supabase cascade delete on client
+            const dbMode = localStorage.getItem('db_mode') || 'cloud';
+            if (dbMode === 'cloud') {
+                try {
+                    const { supabase } = await import('../supabaseClient');
+                    if (record.excel_filename) {
+                        await supabase.from('processed_items').delete().eq('excel_filename', record.excel_filename);
+                    }
+                    if (record.matched_awbs && Array.isArray(record.matched_awbs) && record.matched_awbs.length > 0) {
+                        const orderIds: string[] = [];
+                        for (const item of record.matched_awbs) {
+                            try {
+                                if (typeof item === 'string' && item.startsWith('{')) {
+                                    const parsed = JSON.parse(item);
+                                    if (parsed.id_pesanan) orderIds.push(String(parsed.id_pesanan));
+                                    if (parsed.awb) orderIds.push(String(parsed.awb));
+                                } else if (typeof item === 'object' && item !== null) {
+                                    if ((item as any).id_pesanan) orderIds.push(String((item as any).id_pesanan));
+                                    if ((item as any).awb) orderIds.push(String((item as any).awb));
+                                } else {
+                                    orderIds.push(String(item));
+                                }
+                            } catch {
+                                orderIds.push(String(item));
+                            }
+                        }
+                        const BATCH_SIZE = 50;
+                        for (let i = 0; i < orderIds.length; i += BATCH_SIZE) {
+                            const chunk = orderIds.slice(i, i + BATCH_SIZE);
+                            await supabase.from('processed_items').delete().in('order_id', chunk);
+                            await supabase.from('processed_items').delete().in('awb', chunk);
+                        }
+                    }
+                    await supabase.from('label_process_history').delete().eq('id', record.id);
+                } catch (sbErr) {
+                    console.warn('[SUPABASE] Direct client deletion warning:', sbErr);
+                }
+            }
 
-            if (!response.ok) throw new Error('Gagal menghapus');
+            // 2. Call backend for files cleanup
+            try {
+                await fetch(`${API_CONFIG.BASE_URL}/history/${record.id}`, {
+                    method: 'DELETE',
+                });
+            } catch (beErr) {
+                console.warn('[BACKEND] Backend delete endpoint warning:', beErr);
+            }
 
-            alert('Riwayat berhasil dihapus.');
+            // 3. Cleanup local IndexedDB
+            try {
+                await deleteHistoryFromLocal(record.id);
+                if (record.excel_filename) {
+                    await deleteProcessedItemsByExcelFile(record.excel_filename);
+                }
+            } catch (localErr) {
+                console.warn('[LOCAL] Deletion from IndexedDB failed:', localErr);
+            }
+
+            alert('✅ Riwayat dan data pesanan terkait berhasil dihapus permanen.');
             setSelectedRecord(null);
             setRefreshTrigger(t => t + 1); // trigger refetch
         } catch (error) {
             console.error('Delete error:', error);
-            alert('Gagal menghapus data. Pastikan backend berjalan.');
+            alert('Gagal menghapus data.');
         } finally {
             setDeleteLoading(false);
         }

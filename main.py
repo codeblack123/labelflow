@@ -135,21 +135,15 @@ async def supabase_fetch(method: str, endpoint: str, data=None, params=None, hea
 async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = None, order_by: str = "custom_id", order_dir: str = "asc", is_multi_search: bool = False, gudang_id: str = None):
     # Helper to fetch SKU mappings (Internal Use)
     # If limit is None, fetches ALL data (handling 1000 row limit of Supabase)
-    
     try:
-        # SAFETY: Jika gudang_id tidak dikirim, return kosong untuk mencegah kebocoran data antar gudang
-        if not gudang_id:
-            print("[WARN] fetch_sku_mappings called without gudang_id, returning empty")
-            return []
-        
         # Validasi order_by untuk keamanan (menghindari SQL injection via URL)
         safe_cols = ["custom_id", "sku", "rak"]
         if order_by not in safe_cols:
             order_by = "custom_id"
             
         def apply_search(p: dict):
-            # WAJIB filter per gudang — tidak boleh tanpa gudang_id
-            p["gudang_id"] = f"eq.{gudang_id}"
+            if gudang_id:
+                p["gudang_id"] = f"eq.{gudang_id}"
             if not search: return
             if is_multi_search:
                 import re
@@ -173,7 +167,6 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
                     "order": f"{order_by}.{order_dir}"
                 }
                 
-                
                 apply_search(params)
                     
                 chunk = await supabase_fetch("GET", "sku_mappings", params=params)
@@ -183,7 +176,7 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
                 if len(chunk) < chunk_size:
                     break
                 current_offset += chunk_size
-            return [{"id": item["custom_id"], "sku": item["sku"], "rak": item.get("rak", "")} for item in all_data]
+            return [{"id": item["custom_id"], "sku": item["sku"], "rak": item.get("rak", ""), "gudang_id": item.get("gudang_id")} for item in all_data]
             
         else:
             # Fetch Paginated
@@ -243,9 +236,9 @@ async def count_sku_mappings(search: str = None):
     pass
 
 @app.get("/settings/sku-mappings")
-async def get_sku_mappings():
-    # Legacy Endpoint (returns ALL) - Enhanced to actually fetch ALL (>1000)
-    return await fetch_sku_mappings(limit=None)
+async def get_sku_mappings(gudang_id: Optional[str] = None):
+    # Returns ALL mappings (optionally filtered by gudang_id)
+    return await fetch_sku_mappings(limit=None, gudang_id=gudang_id)
 
 @app.get("/settings/sku-mappings-paginated")
 async def get_sku_mappings_paginated(
@@ -6700,120 +6693,7 @@ async def process_labels(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/history/{id}")
-async def delete_history(id: str, username: Optional[str] = None):
-    """
-    Delete history record and associated files.
-    """
-    try:
-        # 1. Get record details first to find filenames
-        data = await supabase_fetch("GET", f"label_process_history?id=eq.{id}&select=*")
-        if not data:
-            raise HTTPException(status_code=404, detail="History not found")
-        
-        record = data[0]
-        
-        # Security validation for User delete
-        if username:
-            if record.get('username') != username:
-                raise HTTPException(status_code=403, detail="Akses ditolak: Anda bukan pemroses data ini.")
-            
-            created_at_str = record.get('created_at')
-            if created_at_str:
-                try:
-                    if created_at_str.endswith('Z'):
-                        created_at_str = created_at_str.replace('Z', '+00:00')
-                    from datetime import datetime, timezone
-                    record_time = datetime.fromisoformat(created_at_str)
-                    now_time = datetime.now(timezone.utc)
-                    diff_minutes = (now_time - record_time).total_seconds() / 60
-                    
-                    if diff_minutes > 60:
-                        raise HTTPException(status_code=403, detail="Akses ditolak: Waktu penghapusan (60 menit) telah habis.")
-                except Exception as parse_err:
-                    print(f"Error parsing date {created_at_str}: {parse_err}")
-                    raise HTTPException(status_code=500, detail="Gagal memverifikasi waktu data.")
-        excel_filename = record.get('excel_filename')
-        # pdf_filenames might be a list or string depending on how it was saved. In recent implementation it's a list.
-        pdf_filenames = record.get('pdf_filenames', []) 
-        created_at = record.get('created_at') # date string for folder structure
-
-        # 2. Delete Physical Files (Backup Folder)
-        # FIX: Gunakan find_backup_folder() untuk menemukan folder backup yang tepat
-        # Logika lama salah karena mencari di subfolder tanggal (YYYY-MM-DD) yang tidak ada di struktur backup.
-        if created_at and excel_filename:
-            try:
-                # Ambil nama PDF pertama sebagai identifier batch
-                first_pdf_name = None
-                if isinstance(pdf_filenames, list) and pdf_filenames:
-                    first_pdf_name = pdf_filenames[0].replace('.pdf', '').replace('.PDF', '')
-                elif isinstance(pdf_filenames, str) and pdf_filenames:
-                    first_pdf_name = pdf_filenames.replace('.pdf', '').replace('.PDF', '')
-                
-                print(f"[DELETE] Searching backup folder: excel={excel_filename}, pdf={first_pdf_name}")
-                
-                # Gunakan find_backup_folder (mendukung 3 strategi pencocokan)
-                backup_folder = find_backup_folder(
-                    date_str=created_at,
-                    excel_filename=excel_filename,
-                    required_pdf_name=first_pdf_name
-                )
-                
-                if backup_folder and backup_folder.exists():
-                    shutil.rmtree(backup_folder)
-                    print(f"[DELETE] ✅ Backup folder deleted: {backup_folder}")
-                else:
-                    print(f"[DELETE] ⚠️ Backup folder tidak ditemukan (mungkin sudah dihapus atau > 7 hari)")
-                    
-            except Exception as e:
-                print(f"[DELETE] Error deleting backup folder: {e}")
-                # Lanjutkan delete DB meski folder fisik gagal dihapus
-
-        # 3. Delete from Supabase tables
-        # A. Delete processed_items by excel_filename (paling aman & paling akurat)
-        # matched_awbs isinya JSON string '{"id_pesanan":"...","awb":"..."}' sehingga tidak bisa langsung dipakai
-        # Cara paling reliable: hapus semua processed_items yang punya excel_filename yang sama
-        matched_awbs_list = record.get('matched_awbs', [])
-        
-        # Coba parse order_id dari matched_awbs terlebih dahulu
-        order_ids_to_delete = []
-        if matched_awbs_list and isinstance(matched_awbs_list, list):
-            for item in matched_awbs_list:
-                try:
-                    if isinstance(item, str) and item.startswith('{'):
-                        parsed = json.loads(item)
-                        if 'id_pesanan' in parsed:
-                            order_ids_to_delete.append(str(parsed['id_pesanan']))
-                    elif isinstance(item, dict) and 'id_pesanan' in item:
-                        order_ids_to_delete.append(str(item['id_pesanan']))
-                    else:
-                        order_ids_to_delete.append(str(item))
-                except Exception:
-                    order_ids_to_delete.append(str(item))
-        
-        if order_ids_to_delete:
-            print(f"[DELETE] Cascading delete for {len(order_ids_to_delete)} order_ids dari matched_awbs")
-            chunk_size = 30
-            deleted_count = 0
-            for i in range(0, len(order_ids_to_delete), chunk_size):
-                chunk = order_ids_to_delete[i:i + chunk_size]
-                id_filter = ','.join([f'"{pid}"' for pid in chunk])
-                await supabase_fetch("DELETE", f"processed_items?order_id=in.({urllib.parse.quote(id_filter)})")
-                deleted_count += len(chunk)
-            print(f"[DELETE] Cascade deleted {deleted_count} processed_items by order_id")
-        elif excel_filename:
-            # Fallback: hapus semua yang punya excel_filename sama
-            print(f"[DELETE] Cascading delete by excel_filename: {excel_filename}")
-            await supabase_fetch("DELETE", f"processed_items?excel_filename=eq.{urllib.parse.quote(excel_filename)}")
-
-        # B. Delete the history record itself
-        await supabase_fetch("DELETE", f"label_process_history?id=eq.{id}")
-        
-        return {"success": True, "message": "History deleted"}
-
-    except Exception as e:
-        print(f"Delete History Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Note: delete_history is defined below at the end of the file
 
 
 class SabotageManipulateRequest(BaseModel):
@@ -8182,11 +8062,16 @@ async def delete_history(id: str, username: Optional[str] = None):
                 # Lanjutkan delete DB meski folder fisik gagal dihapus
 
         # 3. Delete from Supabase tables
-        # A. Delete processed_items by excel_filename (paling aman & paling akurat)
-        # matched_awbs isinya JSON string '{"id_pesanan":"...","awb":"..."}' sehingga tidak bisa langsung dipakai
+        # A. Always delete processed_items by excel_filename first (cleanest & most complete)
+        if excel_filename:
+            try:
+                print(f"[DELETE] Cascading delete processed_items by excel_filename: {excel_filename}")
+                await supabase_fetch("DELETE", f"processed_items?excel_filename=eq.{urllib.parse.quote(excel_filename)}")
+            except Exception as ef_err:
+                print(f"[DELETE] Error deleting processed_items by excel_filename: {ef_err}")
+
+        # B. Parse and delete any remaining processed_items by order_id or awb
         matched_awbs_list = record.get('matched_awbs', [])
-        
-        # Coba parse order_id dari matched_awbs terlebih dahulu
         order_ids_to_delete = []
         if matched_awbs_list and isinstance(matched_awbs_list, list):
             for item in matched_awbs_list:
@@ -8194,30 +8079,34 @@ async def delete_history(id: str, username: Optional[str] = None):
                     if isinstance(item, str) and item.startswith('{'):
                         parsed = json.loads(item)
                         if 'id_pesanan' in parsed:
-                            order_ids_to_delete.append(str(parsed['id_pesanan']))
-                    elif isinstance(item, dict) and 'id_pesanan' in item:
-                        order_ids_to_delete.append(str(item['id_pesanan']))
+                            order_ids_to_delete.append(str(parsed['id_pesanan']).strip())
+                        if 'awb' in parsed:
+                            order_ids_to_delete.append(str(parsed['awb']).strip())
+                    elif isinstance(item, dict):
+                        if 'id_pesanan' in item:
+                            order_ids_to_delete.append(str(item['id_pesanan']).strip())
+                        if 'awb' in item:
+                            order_ids_to_delete.append(str(item['awb']).strip())
                     else:
-                        order_ids_to_delete.append(str(item))
+                        order_ids_to_delete.append(str(item).strip())
                 except Exception:
-                    order_ids_to_delete.append(str(item))
+                    order_ids_to_delete.append(str(item).strip())
         
+        order_ids_to_delete = list(set([x for x in order_ids_to_delete if x]))
+
         if order_ids_to_delete:
-            print(f"[DELETE] Cascading delete for {len(order_ids_to_delete)} order_ids dari matched_awbs")
-            chunk_size = 30
-            deleted_count = 0
+            print(f"[DELETE] Cascading delete for {len(order_ids_to_delete)} identifiers from matched_awbs")
+            chunk_size = 50
             for i in range(0, len(order_ids_to_delete), chunk_size):
                 chunk = order_ids_to_delete[i:i + chunk_size]
-                id_filter = ','.join([f'"{pid}"' for pid in chunk])
-                await supabase_fetch("DELETE", f"processed_items?order_id=in.({urllib.parse.quote(id_filter)})")
-                deleted_count += len(chunk)
-            print(f"[DELETE] Cascade deleted {deleted_count} processed_items by order_id")
-        elif excel_filename:
-            # Fallback: hapus semua yang punya excel_filename sama
-            print(f"[DELETE] Cascading delete by excel_filename: {excel_filename}")
-            await supabase_fetch("DELETE", f"processed_items?excel_filename=eq.{urllib.parse.quote(excel_filename)}")
+                id_filter = ','.join([urllib.parse.quote(pid) for pid in chunk])
+                try:
+                    await supabase_fetch("DELETE", f"processed_items?order_id=in.({id_filter})")
+                    await supabase_fetch("DELETE", f"processed_items?awb=in.({id_filter})")
+                except Exception as del_err:
+                    print(f"[DELETE] Error deleting processed_items chunk: {del_err}")
 
-        # B. Delete the history record itself
+        # C. Delete the history record itself
         await supabase_fetch("DELETE", f"label_process_history?id=eq.{id}")
         
         return {"success": True, "message": "History deleted"}
