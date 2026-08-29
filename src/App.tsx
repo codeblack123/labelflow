@@ -4001,29 +4001,38 @@ const App: React.FC = () => {
                 excelAwbs={unmatchedWarningData2?.excelAwbs || []}
                 pdfAwbs={unmatchedWarningData2?.pdfAwbs || []}
             />
-            <header className="sticky top-0 z-20 border-b border-slate-800/80 shadow-lg" style={{ backgroundColor: '#0b0f19' }}>
-                <div className="relative mx-auto px-4 py-2.5 min-h-[3.75rem] flex items-center justify-between gap-4 w-full max-w-full xl:max-w-7xl">
-                    {/* Logo/Title */}
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                        <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-blue-500/30">
-                            <FiActivity className="w-5 h-5" />
+            <header className="sticky top-0 z-30 border-b border-slate-800/80 shadow-lg backdrop-blur-md bg-[#0b0f19]/95">
+                <div className="mx-auto px-4 sm:px-6 lg:px-8 min-h-[3.75rem] flex items-center justify-between gap-3 lg:gap-6 w-full max-w-full 2xl:max-w-[1720px]">
+                    {/* Left: Logo + Gudang + DB Mode */}
+                    <div className="flex items-center gap-2.5 sm:gap-4 flex-shrink-0">
+                        {/* Logo/Title */}
+                        <div 
+                            className="flex items-center gap-2.5 cursor-pointer select-none"
+                            onClick={() => {
+                                setActiveMenu('dashboard' as any);
+                                window.history.pushState({}, '', '?menu=dashboard');
+                            }}
+                        >
+                            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-blue-500/30 transition-transform hover:scale-105">
+                                <FiActivity className="w-5 h-5" />
+                            </div>
+                            <div className="hidden sm:block">
+                                <h1 className="text-sm lg:text-base font-bold text-white tracking-tight leading-none">Label Flow</h1>
+                                <p className="text-[10px] text-slate-400 font-normal leading-tight mt-1">Proses label otomatis</p>
+                            </div>
                         </div>
-                        <div className="hidden md:block">
-                            <h1 className="text-sm lg:text-base font-bold text-white tracking-tight leading-none">Label Flow</h1>
-                            <p className="text-[10px] text-slate-400 font-normal leading-tight mt-1">Proses label otomatis</p>
-                        </div>
-                    </div>
 
-                    {/* Desktop Navigation - Hidden on mobile */}
-                    <nav className="hidden lg:flex items-center gap-3 xl:gap-5 flex-wrap justify-end">
+                        {/* Vertical Divider */}
+                        <div className="hidden md:block h-6 w-px bg-slate-800 flex-shrink-0" />
+
                         {/* Active Warehouse Switcher / Badge */}
                         {accessibleWarehouses.length > 1 ? (
-                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#131b2e] border border-blue-500/40 text-xs shadow-inner mr-2 flex-shrink-0" title="Pilih Gudang Aktif">
+                            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#131b2e] border border-blue-500/40 text-xs shadow-inner flex-shrink-0 hover:border-blue-400 transition-colors" title="Pilih Gudang Aktif">
                                 <span className="text-sm">🏢</span>
                                 <select
                                     value={activeWarehouseId || ''}
                                     onChange={(e) => handleSelectWarehouse(e.target.value)}
-                                    className="bg-transparent text-white font-bold text-xs border-none outline-none cursor-pointer focus:ring-0 py-0.5"
+                                    className="bg-transparent text-white font-bold text-xs border-none outline-none cursor-pointer focus:ring-0 py-0 pr-2"
                                 >
                                     {accessibleWarehouses.map(w => (
                                         <option key={w.id} value={w.id} className="bg-slate-900 text-white font-medium">
@@ -4033,32 +4042,35 @@ const App: React.FC = () => {
                                 </select>
                             </div>
                         ) : accessibleWarehouses.length === 1 ? (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#131b2e] border border-slate-800 text-xs font-bold text-blue-400 select-none shadow-inner mr-2 flex-shrink-0" title="Gudang aktif untuk akun ini">
+                            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#131b2e] border border-slate-800 text-xs font-bold text-blue-400 select-none shadow-inner flex-shrink-0" title="Gudang aktif untuk akun ini">
                                 <span>🏢</span>
-                                <span>{accessibleWarehouses[0].name}</span>
+                                <span className="truncate max-w-[140px]">{accessibleWarehouses[0].name}</span>
                             </div>
                         ) : null}
 
                         {/* DB Mode Toggle (Desktop) */}
                         <div
-                            className="flex items-center gap-1 p-1 rounded-xl bg-[#131b2e] border border-slate-800 cursor-pointer select-none mr-2 flex-shrink-0"
+                            className="hidden md:flex items-center gap-1 p-1 rounded-xl bg-[#131b2e] border border-slate-800 cursor-pointer select-none flex-shrink-0"
                             onClick={() => handleDbSwitchClick(dbMode === 'cloud' ? 'local' : 'cloud')}
                             title={dbMode === 'cloud' ? "Mode Cloud: Cek Supabase (Prioritas) -> Local" : "Mode Local: Cek Local DB Saja"}
                         >
-                            <div className={`px-3 py-1 rounded-lg text-[11px] font-bold uppercase transition-all duration-200 flex items-center gap-1 ${
+                            <div className={`px-2.5 py-1 rounded-lg text-[10px] xl:text-[11px] font-bold uppercase transition-all duration-200 flex items-center gap-1 ${
                                 dbMode === 'cloud' ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30' : 'text-slate-400 hover:text-slate-200'
                             }`}>
                                 Cloud
                             </div>
-                            <div className={`px-3 py-1 rounded-lg text-[11px] font-bold uppercase transition-all duration-200 flex items-center gap-1 ${
+                            <div className={`px-2.5 py-1 rounded-lg text-[10px] xl:text-[11px] font-bold uppercase transition-all duration-200 flex items-center gap-1 ${
                                 dbMode === 'local' ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/30' : 'text-slate-400 hover:text-slate-200'
                             }`}>
                                 Local
                             </div>
                         </div>
+                    </div>
 
+                    {/* Right: Desktop Navigation + Notification + Profile */}
+                    <div className="hidden lg:flex items-center gap-3 xl:gap-5 flex-nowrap min-w-0">
                         {/* Nav links */}
-                        <div className="flex items-center gap-2 xl:gap-4 flex-wrap">
+                        <nav className="flex items-center gap-1 xl:gap-2.5 flex-nowrap overflow-x-auto no-scrollbar py-1">
                             {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')).map(menuId => {
                                 const def = MENU_DEFINITIONS[menuId];
                                 const isActive = activeMenu === menuId;
@@ -4072,26 +4084,26 @@ const App: React.FC = () => {
                                             if (menuId === 'history') setHistoryKey(prev => prev + 1); 
                                             window.history.pushState({}, '', `?menu=${menuId}`); 
                                         }}
-                                        className={`relative py-1 text-xs lg:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                                        className={`relative px-2.5 py-1.5 text-xs xl:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 rounded-lg ${
                                             isActive 
-                                                ? 'text-white font-bold' 
-                                                : 'text-slate-300 hover:text-white font-medium'
+                                                ? 'text-white font-bold bg-white/10' 
+                                                : 'text-slate-300 hover:text-white hover:bg-white/5 font-medium'
                                         }`}
                                     >
-                                        {menuId === 'dashboard' && <FiActivity className="w-4 h-4 text-blue-400" />}
-                                        {def.label}
+                                        {menuId === 'dashboard' && <FiActivity className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
+                                        <span>{def.label}</span>
                                         {isActive && (
-                                            <span className="absolute -bottom-2 left-0 right-0 h-[2.5px] bg-blue-500 rounded-full shadow-sm shadow-blue-500/50" />
+                                            <span className="absolute -bottom-1 left-2.5 right-2.5 h-[2.5px] bg-blue-500 rounded-full shadow-sm shadow-blue-500/50" />
                                         )}
                                     </a>
                                 );
                             })}
-                        </div>
+                        </nav>
 
                         {/* Right notification bell + User Profile */}
-                        <div className="flex items-center gap-2 pl-3 ml-2 border-l border-slate-800">
+                        <div className="flex items-center gap-2 pl-3 border-l border-slate-800 flex-shrink-0">
                             {/* Notification Bell */}
-                            <button className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">
+                            <button className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors flex-shrink-0">
                                 <FiBell className="w-4 h-4" />
                                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#0b0f19]" />
                             </button>
@@ -4106,18 +4118,25 @@ const App: React.FC = () => {
                                 }}
                             />
                         </div>
-                    </nav>
+                    </div>
 
-                    {/* Mobile Hamburger Button - Shown below lg breakpoint */}
-                    <button
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className="lg:hidden p-2 rounded-lg transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
-                        style={{color: '#94a3b8', backgroundColor: 'transparent'}}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#1e293b')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                        aria-label="Toggle menu"
-                    >
-                        {mobileMenuOpen ? (
+                    {/* Mobile Controls Right (< lg) */}
+                    <div className="flex items-center gap-2 lg:hidden">
+                        {/* Compact Gudang Icon/Badge on mobile header if available */}
+                        {accessibleWarehouses.length > 0 && (
+                            <div className="flex sm:hidden items-center gap-1 px-2 py-1 rounded-lg bg-[#131b2e] border border-blue-500/30 text-[10px] text-blue-400 font-bold max-w-[120px] truncate">
+                                <span>🏢</span>
+                                <span className="truncate">{warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang'}</span>
+                            </div>
+                        )}
+
+                        {/* Mobile Hamburger Button */}
+                        <button
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="p-2 rounded-lg transition-colors touch-manipulation min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/60"
+                            aria-label="Toggle menu"
+                        >
+                            {mobileMenuOpen ? (
                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -4128,9 +4147,10 @@ const App: React.FC = () => {
                         )}
                     </button>
                 </div>
+            </div>
 
-                {/* Mobile Menu Drawer - Slide in from right */}
-                {mobileMenuOpen && (
+            {/* Mobile Menu Drawer - Slide in from right */}
+            {mobileMenuOpen && (
                     <div className="lg:hidden fixed inset-0 z-50" onClick={() => setMobileMenuOpen(false)}>
                         <div className="absolute inset-0 bg-black bg-opacity-50" />
                         <div
