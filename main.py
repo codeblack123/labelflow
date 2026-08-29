@@ -52,11 +52,46 @@ def register_fonts():
 
 register_fonts()
 
+BACKEND_VERSION = "v2.5.0"
+
+def get_main_file_info():
+    try:
+        main_file = Path(__file__).resolve()
+        mtime = datetime.fromtimestamp(os.path.getmtime(main_file)).isoformat()
+        file_size = os.path.getsize(main_file)
+        return {
+            "mtime": mtime,
+            "size": file_size,
+            "path": str(main_file)
+        }
+    except Exception:
+        return {"mtime": None, "size": None, "path": None}
+
 app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Local backend is running"}
+    finfo = get_main_file_info()
+    return {
+        "status": "ok", 
+        "message": "Local backend is running",
+        "version_code": BACKEND_VERSION,
+        "file_mtime": finfo["mtime"],
+        "file_size": finfo["size"]
+    }
+
+@app.get("/backend-version")
+@app.get("/system-info")
+async def get_backend_version():
+    finfo = get_main_file_info()
+    return {
+        "status": "ok",
+        "version_code": BACKEND_VERSION,
+        "file_mtime": finfo["mtime"],
+        "file_size": finfo["size"],
+        "file_path": finfo["path"],
+        "server_time": datetime.now().isoformat()
+    }
 
 app.add_middleware(
     CORSMiddleware,
