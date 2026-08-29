@@ -42,6 +42,15 @@ const StaffModal: React.FC<StaffModalProps> = ({ onClose, onSuccess, showToast, 
                 return;
             }
 
+            // Get parent user's assigned_warehouses
+            const { data: parentUser } = await supabase
+                .from('auth_users')
+                .select('assigned_warehouses')
+                .eq('username', parentAccount.toLowerCase())
+                .maybeSingle();
+
+            const parentWarehouses = parentUser?.assigned_warehouses || [];
+
             // Insert new staff account
             const { error } = await supabase
                 .from('auth_users')
@@ -52,7 +61,8 @@ const StaffModal: React.FC<StaffModalProps> = ({ onClose, onSuccess, showToast, 
                     parent_account: parentAccount,
                     full_name: name,
                     department: department,
-                    status: status
+                    status: status,
+                    assigned_warehouses: parentWarehouses
                 }]);
 
             if (error) throw error;

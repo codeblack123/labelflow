@@ -75,7 +75,7 @@ interface ProSessionItem {
 const SESSION_TIMEOUT = 6 * 60 * 60 * 1000;
 
 const App: React.FC = () => {
-    const [user, setUser] = useState<{ username: string; role: string; full_name?: string; loginDate?: string; theme?: string; tenant_id?: string; parent_account?: string } | null>(() => {
+    const [user, setUser] = useState<{ username: string; role: string; full_name?: string; loginDate?: string; theme?: string; tenant_id?: string; parent_account?: string; assigned_warehouses?: string[] } | null>(() => {
         if (typeof window !== 'undefined') {
             const savedUser = localStorage.getItem('user_session');
             if (savedUser) {
@@ -240,10 +240,97 @@ const App: React.FC = () => {
     // Mobile menu state
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    const handleLogin = (userData: any) => {
+    // Warehouse Global State
+    const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
+    const [activeWarehouseId, setActiveWarehouseId] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('active_gudang_id');
+        }
+        return null;
+    });
+
+    useEffect(() => {
+        const fetchWarehouses = async () => {
+            try {
+                const { data, error } = await supabase.from('warehouses').select('id, name').order('name');
+                if (!error && data) {
+                    setWarehouses(data);
+                }
+            } catch (e) {
+                console.error("Error fetching warehouses", e);
+            }
+        };
+        fetchWarehouses();
+
+        const channel = supabase.channel('app-global-warehouses')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, () => {
+                fetchWarehouses();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    // Filter accessible warehouses for current user
+    const accessibleWarehouses = React.useMemo(() => {
+        if (!warehouses || warehouses.length === 0) return [];
+        if (!user || user.role === 'developer') return warehouses;
+        if (user.assigned_warehouses && user.assigned_warehouses.length > 0) {
+            const filtered = warehouses.filter(w => user.assigned_warehouses!.includes(w.id));
+            return filtered.length > 0 ? filtered : warehouses;
+        }
+        return warehouses;
+    }, [warehouses, user]);
+
+    // Keep activeWarehouseId in sync with user's accessible warehouses
+    useEffect(() => {
+        if (accessibleWarehouses.length > 0) {
+            const exists = accessibleWarehouses.some(w => w.id === activeWarehouseId);
+            if (!activeWarehouseId || !exists) {
+                const defaultId = accessibleWarehouses[0].id;
+                setActiveWarehouseId(defaultId);
+                localStorage.setItem('active_gudang_id', defaultId);
+            }
+        }
+    }, [accessibleWarehouses, activeWarehouseId]);
+
+    const handleSelectWarehouse = (wId: string) => {
+        setActiveWarehouseId(wId);
+        localStorage.setItem('active_gudang_id', wId);
+        const wName = warehouses.find(w => w.id === wId)?.name || 'Gudang';
+        showToast(`🏢 Gudang aktif: ${wName}`);
+    };
+
+    const handleLogin = async (userData: any) => {
         const today = new Date().toLocaleDateString('sv-SE');
         const tenant_id = userData.role === 'staff' ? userData.parent_account : userData.username;
-        const sessionData = { ...userData, tenant_id, loginDate: today, theme: userData.theme || 'Biru Tua' };
+        let assigned_warehouses = userData.assigned_warehouses || [];
+
+        // If staff has no assigned_warehouses, inherit from parent_account
+        if (userData.role === 'staff' && (!assigned_warehouses || assigned_warehouses.length === 0) && userData.parent_account) {
+            try {
+                const { data: parentUser } = await supabase
+                    .from('auth_users')
+                    .select('assigned_warehouses')
+                    .eq('username', userData.parent_account.toLowerCase())
+                    .maybeSingle();
+                if (parentUser && parentUser.assigned_warehouses) {
+                    assigned_warehouses = parentUser.assigned_warehouses;
+                }
+            } catch (err) {
+                console.error('Failed to inherit parent assigned_warehouses', err);
+            }
+        }
+
+        const sessionData = { 
+            ...userData, 
+            assigned_warehouses, 
+            tenant_id, 
+            loginDate: today, 
+            theme: userData.theme || 'Biru Tua' 
+        };
         setUser(sessionData);
         localStorage.setItem('user_session', JSON.stringify(sessionData));
         setViewState('app');
@@ -1446,7 +1533,7 @@ const App: React.FC = () => {
 
     const handleDownloadPackingList = (excelName: string, date: string, pdfName?: string) => {
         try {
-            const url = `${API_CONFIG.BASE_URL}/generate-packing-list?date=${date}&excel=${encodeURIComponent(excelName)}&pdf_name=${encodeURIComponent(pdfName || '')}`;
+            const url = `${API_CONFIG.BASE_URL}/generate-packing-list?date=${date}&excel=${encodeURIComponent(excelName)}&pdf_name=${encodeURIComponent(pdfName || '')}${activeWarehouseId ? `&gudang_id=${encodeURIComponent(activeWarehouseId)}` : ''}`;
             window.open(url, '_blank');
         } catch (error) {
             console.error('Download error:', error);
@@ -1766,6 +1853,9 @@ const App: React.FC = () => {
         if (includeGlobalMsku) {
             formData.append('include_global_msku', 'true');
         }
+        if (activeWarehouseId) {
+            formData.append('gudang_id', activeWarehouseId);
+        }
 
         try {
             let currentProgress = 10;
@@ -1994,6 +2084,9 @@ const App: React.FC = () => {
         }
         if (includeGlobalMsku) {
             formData.append('include_global_msku', 'true');
+        }
+        if (activeWarehouseId) {
+            formData.append('gudang_id', activeWarehouseId);
         }
 
         try {
@@ -2306,6 +2399,9 @@ const App: React.FC = () => {
                 if (includeGlobalMsku) {
                     formData.append('include_global_msku', 'true');
                 }
+                if (activeWarehouseId) {
+                    formData.append('gudang_id', activeWarehouseId);
+                }
 
                 const response = await axios.post(
                     `${API_CONFIG.BASE_URL}/process-labels-with-stats`,
@@ -2593,6 +2689,9 @@ const App: React.FC = () => {
             if (includeGlobalMsku) {
                 formData.append('include_global_msku', 'true');
             }
+            if (activeWarehouseId) {
+                formData.append('gudang_id', activeWarehouseId);
+            }
 
             const response = await axios.post(
                 `${API_CONFIG.BASE_URL}/process-labels-with-stats`,
@@ -2809,6 +2908,9 @@ const App: React.FC = () => {
             }
             if (includeSummary) {
                 formData.append('include_summary', 'true');
+            }
+            if (activeWarehouseId) {
+                formData.append('gudang_id', activeWarehouseId);
             }
 
             const response = await axios.post(
@@ -3181,6 +3283,9 @@ const App: React.FC = () => {
         if (includeSummary) {
             formData.append('include_summary', 'true');
         }
+        if (activeWarehouseId) {
+            formData.append('gudang_id', activeWarehouseId);
+        }
 
         try {
             let currentProgress = 10;
@@ -3502,6 +3607,9 @@ const App: React.FC = () => {
             }
             if (includeGlobalMsku) {
                 formData.append('include_global_msku', 'true');
+            }
+            if (activeWarehouseId) {
+                formData.append('gudang_id', activeWarehouseId);
             }
 
             const response = await axios.post(
@@ -3908,6 +4016,29 @@ const App: React.FC = () => {
 
                     {/* Desktop Navigation - Hidden on mobile */}
                     <nav className="hidden lg:flex items-center gap-3 xl:gap-5 flex-wrap justify-end">
+                        {/* Active Warehouse Switcher / Badge */}
+                        {accessibleWarehouses.length > 1 ? (
+                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#131b2e] border border-blue-500/40 text-xs shadow-inner mr-2 flex-shrink-0" title="Pilih Gudang Aktif">
+                                <span className="text-sm">🏢</span>
+                                <select
+                                    value={activeWarehouseId || ''}
+                                    onChange={(e) => handleSelectWarehouse(e.target.value)}
+                                    className="bg-transparent text-white font-bold text-xs border-none outline-none cursor-pointer focus:ring-0 py-0.5"
+                                >
+                                    {accessibleWarehouses.map(w => (
+                                        <option key={w.id} value={w.id} className="bg-slate-900 text-white font-medium">
+                                            {w.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        ) : accessibleWarehouses.length === 1 ? (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#131b2e] border border-slate-800 text-xs font-bold text-blue-400 select-none shadow-inner mr-2 flex-shrink-0" title="Gudang aktif untuk akun ini">
+                                <span>🏢</span>
+                                <span>{accessibleWarehouses[0].name}</span>
+                            </div>
+                        ) : null}
+
                         {/* DB Mode Toggle (Desktop) */}
                         <div
                             className="flex items-center gap-1 p-1 rounded-xl bg-[#131b2e] border border-slate-800 cursor-pointer select-none mr-2 flex-shrink-0"
@@ -4030,6 +4161,31 @@ const App: React.FC = () => {
 
                             {/* Mobile Menu Items */}
                             <nav className="p-3">
+                                {/* Warehouse Switcher (Mobile) */}
+                                {accessibleWarehouses.length > 0 && (
+                                    <div className="mb-3 pb-3" style={{borderBottom: '1px solid #1e293b'}}>
+                                        <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{color: '#475569'}}>Gudang Aktif</p>
+                                        {accessibleWarehouses.length > 1 ? (
+                                            <select
+                                                value={activeWarehouseId || ''}
+                                                onChange={(e) => handleSelectWarehouse(e.target.value)}
+                                                className="w-full p-2.5 rounded-xl text-xs font-bold bg-[#1e293b] text-white border border-blue-500/40 outline-none"
+                                            >
+                                                {accessibleWarehouses.map(w => (
+                                                    <option key={w.id} value={w.id} className="bg-slate-900 text-white">
+                                                        {w.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#1e293b] border border-slate-800 text-xs font-bold text-blue-400">
+                                                <span>🏢</span>
+                                                <span>{accessibleWarehouses[0].name}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* DB Mode Toggle (Mobile) */}
                                 <div className="mb-3 pb-3" style={{borderBottom: '1px solid #1e293b'}}>
                                     <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{color: '#475569'}}>Database Mode</p>

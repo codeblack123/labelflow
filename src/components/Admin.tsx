@@ -27,7 +27,7 @@ import AdminFeatureAudit from './AdminFeatureAudit';
 import AdminStaffManager from './AdminStaffManager';
 interface AdminProps {
     showToast?: (message: string) => void;
-    user?: { role: string; username: string } | null;
+    user?: { role: string; username: string; assigned_warehouses?: string[] } | null;
     onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[], skipPinMenus?: string[]) => void;
 }
 

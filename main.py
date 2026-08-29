@@ -1899,8 +1899,8 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
         raise HTTPException(status_code=500, detail=f"Gagal import: {str(e)}")
 
 @app.get("/settings/export-sku")
-async def export_sku_mappings():
-    mappings = await get_sku_mappings() 
+async def export_sku_mappings(gudang_id: Optional[str] = Query(None)):
+    mappings = await get_sku_mappings(gudang_id=gudang_id) 
         
     df = pd.DataFrame(mappings)
     if not df.empty:
@@ -3473,7 +3473,7 @@ async def download_backup(type: str, date: str, excel: str):
 
 
 @app.get("/generate-packing-list")
-async def generate_packing_list(date: str, excel: str, pdf_name: str = None):
+async def generate_packing_list(date: str, excel: str, pdf_name: str = None, gudang_id: Optional[str] = Query(None)):
     """
     Generate Packing List Excel from original backup Excel.
     Columns: A: ID (Empty), B: SKU (MSKU), C: QTY (Sum), D: NO. PESANAN (Join).
@@ -3726,7 +3726,7 @@ async def generate_packing_list(date: str, excel: str, pdf_name: str = None):
         sku_map = {}
         try:
              # Reuse existing fetch logic (it's async, but we are in async def)
-             mappings = await get_sku_mappings()
+             mappings = await get_sku_mappings(gudang_id=gudang_id)
              # Create lookup: Normalized SKU -> CustomID
              # Mappings in DB is {id, sku} where 'id' is actually the custom_id due to get_sku_mappings transformation
              
@@ -5556,7 +5556,8 @@ async def process_labels(
     priority_kembar: bool = Form(False),
     sort_by_sku_count: bool = Form(False),
     include_global_msku: bool = Form(False),
-    picker_name: Optional[str] = Form(None)
+    picker_name: Optional[str] = Form(None),
+    gudang_id: Optional[str] = Form(None)
 ):
     """
     Process labels and return match statistics along with the PDF.
@@ -5766,7 +5767,7 @@ async def process_labels(
         rak_map = {}
         if is_extended:
             try:
-                mappings = await get_sku_mappings()
+                mappings = await get_sku_mappings(gudang_id=gudang_id)
                 rak_map = {m['sku'].strip().upper(): {"rak": m.get('rak', ''), "id": m.get('id', '')} for m in mappings}
             except:
                 pass
@@ -6886,7 +6887,8 @@ async def process_labels_with_stats(
     priority_kembar: bool = Form(False),
     sort_by_sku_count: bool = Form(False),
     include_global_msku: bool = Form(False),
-    picker_name: Optional[str] = Form(None)
+    picker_name: Optional[str] = Form(None),
+    gudang_id: Optional[str] = Form(None)
 ):
     """
     Process labels and return match statistics along with the PDF.
@@ -7096,7 +7098,7 @@ async def process_labels_with_stats(
         rak_map = {}
         if is_extended:
             try:
-                mappings = await get_sku_mappings()
+                mappings = await get_sku_mappings(gudang_id=gudang_id)
                 rak_map = {m['sku'].strip().upper(): {"rak": m.get('rak', ''), "id": m.get('id', '')} for m in mappings}
             except:
                 pass
@@ -8413,7 +8415,8 @@ async def health_check():
 @app.post("/toolkit/generate-packing-list")
 async def toolkit_generate_packing_list(
     excel_file: UploadFile = File(...),
-    pdf_files: list[UploadFile] = File(...)
+    pdf_files: list[UploadFile] = File(...),
+    gudang_id: Optional[str] = Form(None)
 ):
     try:
         content = await excel_file.read()
@@ -8497,7 +8500,7 @@ async def toolkit_generate_packing_list(
         # 1. Fetch Mapping ID & Rak
         rak_map = {}
         try:
-            mappings = await get_sku_mappings()
+            mappings = await get_sku_mappings(gudang_id=gudang_id)
             rak_map = {m['sku'].strip().upper(): {"rak": m.get('rak', ''), "id": m.get('id', '')} for m in mappings}
         except Exception as e:
             print(f"[PACKING LIST] Failed to fetch mappings: {e}")
