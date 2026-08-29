@@ -516,6 +516,24 @@ const App: React.FC = () => {
     } | null>(null);
     const [isAutoUpdatingSuccess, setIsAutoUpdatingSuccess] = useState(false);
 
+    // Helper to compare versions (e.g. v2.5.0 >= v1.0.5)
+    const isVersionGte = (localVer?: string, targetVer?: string): boolean => {
+        if (!localVer || !targetVer) return false;
+        if (localVer.trim().toLowerCase() === targetVer.trim().toLowerCase()) return true;
+        const cleanL = localVer.toLowerCase().replace(/[^0-9.]/g, '');
+        const cleanT = targetVer.toLowerCase().replace(/[^0-9.]/g, '');
+        if (!cleanL || !cleanT) return false;
+        const partsL = cleanL.split('.').map(n => parseInt(n, 10) || 0);
+        const partsT = cleanT.split('.').map(n => parseInt(n, 10) || 0);
+        for (let i = 0; i < Math.max(partsL.length, partsT.length); i++) {
+            const valL = partsL[i] || 0;
+            const valT = partsT[i] || 0;
+            if (valL > valT) return true;
+            if (valL < valT) return false;
+        }
+        return true;
+    };
+
     // --- Check System Update on Mount & Periodically ---
     useEffect(() => {
         const checkSystemUpdate = async () => {
@@ -530,19 +548,24 @@ const App: React.FC = () => {
                 
                 if (data && !error) {
                     let isLocalAlreadyUpdated = false;
-                    let localInfo = null;
+                    let localInfo: any = null;
 
                     try {
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 2000);
                         const res = await fetch(`${API_CONFIG.BASE_URL}/backend-version`, { signal: controller.signal });
                         clearTimeout(timeoutId);
+                        
                         if (res.ok) {
                             localInfo = await res.json();
-                            setLocalBackendInfo(localInfo);
+                            setLocalBackendInfo({
+                                ...localInfo,
+                                is_running: true,
+                                is_old: false
+                            });
                             
-                            // Check if version matches or file mtime is newer/equal to update time
-                            if (localInfo.version_code && data.version_code && localInfo.version_code.trim().toLowerCase() === data.version_code.trim().toLowerCase()) {
+                            // Check if version is equal or newer (e.g. v2.5.0 >= v1.0.5)
+                            if (localInfo.version_code && data.version_code && isVersionGte(localInfo.version_code, data.version_code)) {
                                 isLocalAlreadyUpdated = true;
                             } else if (localInfo.file_mtime && data.updated_at) {
                                 const localTime = new Date(localInfo.file_mtime).getTime();
@@ -552,9 +575,22 @@ const App: React.FC = () => {
                                 }
                             }
                         } else {
-                            setLocalBackendInfo(null);
+                            // Endpoint /backend-version does not exist yet -> Running old main.py!
+                            const rootRes = await fetch(`${API_CONFIG.BASE_URL}/`, { signal: controller.signal });
+                            if (rootRes.ok) {
+                                const rootData = await rootRes.json();
+                                setLocalBackendInfo({
+                                    version_code: rootData.version_code || 'Versi Lama',
+                                    file_path: 'C:\\...\\main.py (Perlu Diperbarui)',
+                                    is_running: true,
+                                    is_old: true
+                                });
+                            } else {
+                                setLocalBackendInfo(null);
+                            }
                         }
                     } catch (e) {
+                        // Server is completely offline
                         setLocalBackendInfo(null);
                     }
 
@@ -589,7 +625,7 @@ const App: React.FC = () => {
         };
         checkSystemUpdate();
         
-        // Also check periodically (every 3 seconds when update modal is active to auto-close on update, else 10s)
+        // Check periodically (every 3 seconds when update modal is active to auto-close on update, else 10s)
         const intervalId = setInterval(checkSystemUpdate, showUpdateModal ? 3000 : 10000);
         return () => clearInterval(intervalId);
     }, [showUpdateModal]);
@@ -3582,7 +3618,7 @@ const App: React.FC = () => {
                                             <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                                                 <FiActivity className="w-4 h-4 text-blue-600" /> Deteksi Real-Time main.py Lokal
                                             </span>
-                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${localBackendInfo ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${localBackendInfo ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
                                                 {localBackendInfo ? 'SERVER AKTIF' : 'SERVER OFFLINE'}
                                             </span>
                                         </div>
@@ -3591,42 +3627,59 @@ const App: React.FC = () => {
                                             <div className="text-xs text-slate-600 space-y-1">
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-slate-500">Versi Saat Ini:</span>
-                                                    <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{localBackendInfo.version_code || 'v1.x (Lama)'}</span>
+                                                    <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{localBackendInfo.version_code || 'Versi Lama'}</span>
                                                 </div>
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-slate-500">Target Update:</span>
                                                     <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{systemUpdate.version_code}</span>
                                                 </div>
                                                 {localBackendInfo.file_path && (
-                                                    <p className="text-[11px] text-slate-400 font-mono truncate mt-1">
-                                                        📁 {localBackendInfo.file_path}
+                                                    <p className="text-[11px] text-slate-400 font-mono truncate mt-1 flex items-center gap-1">
+                                                        <FaFolderOpen className="w-3 h-3 text-slate-400 flex-shrink-0" /> {localBackendInfo.file_path}
                                                     </p>
                                                 )}
                                                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                                                    <span className="text-slate-500 flex items-center gap-1">
-                                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" /> Menunggu update...
+                                                    <span className="text-amber-600 font-semibold flex items-center gap-1.5">
+                                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" /> Menunggu update & restart server...
                                                     </span>
-                                                    <span className="text-slate-400">Otomatis tertutup saat update selesai</span>
+                                                    <span className="text-slate-400">Otomatis tertutup setelah server nyala</span>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="text-xs text-slate-500 space-y-1">
-                                                <p className="text-amber-700 font-medium">
-                                                    ⏹️ Server lokal sedang dimatikan (Bagus! Silakan jalankan update lalu buka server kembali).
+                                                <p className="text-emerald-700 font-bold flex items-center gap-1.5">
+                                                    <FiCheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" /> Server lama sedang dimatikan (Bagus).
                                                 </p>
-                                                <p className="text-[11px] text-slate-400">
-                                                    Saat server dijalankan kembali dengan file <code>main.py</code> baru, pop-up ini akan langsung tertutup otomatis.
+                                                <p className="text-[11px] text-slate-500">
+                                                    Silakan jalankan file <code>update_backend.bat</code>, lalu buka kembali <code>start_app.py</code>. Jendela ini akan tertutup otomatis.
                                                 </p>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="prose prose-sm prose-slate max-w-none">
-                                        <p className="font-bold text-slate-800 mb-2 text-sm">Instruksi Pembaruan:</p>
-                                        <div className="bg-white border-2 border-red-100 rounded-2xl p-4 text-slate-700 whitespace-pre-line text-xs sm:text-sm leading-relaxed shadow-sm font-medium">
-                                            {systemUpdate.instructions}
-                                        </div>
+                                    {/* 4 Easy Steps Guide */}
+                                    <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 text-xs space-y-2 text-slate-700">
+                                        <p className="font-bold text-blue-900 text-xs flex items-center gap-1.5">
+                                            <FiInfo className="w-4 h-4 text-blue-600 flex-shrink-0" /> Panduan Pembaruan Sistem:
+                                        </p>
+                                        <ol className="list-decimal list-inside space-y-1 text-slate-600 leading-relaxed font-medium">
+                                            <li>Klik <strong>Langkah 1</strong> & <strong>Langkah 2</strong> pada tombol di bawah untuk download file.</li>
+                                            <li>
+                                                <strong>Tutup jendela hitam CMD server</strong> lama (cukup klik tombol silang <strong>[X]</strong> di pojok kanan atas jendela hitam CMD).
+                                            </li>
+                                            <li>Buka folder <em>Downloads</em> dan dobel klik file <strong>update_backend.bat</strong>.</li>
+                                            <li>Jalankan kembali <strong>start_app.py</strong> &mdash; <em>pop-up akan langsung tertutup otomatis!</em></li>
+                                        </ol>
                                     </div>
+
+                                    {systemUpdate.instructions && systemUpdate.instructions.trim() && (
+                                        <div className="prose prose-sm prose-slate max-w-none">
+                                            <p className="font-bold text-slate-800 mb-1 text-xs">Catatan Tambahan:</p>
+                                            <div className="bg-white border border-slate-200 rounded-xl p-3 text-slate-700 whitespace-pre-line text-xs leading-relaxed shadow-xs font-medium">
+                                                {systemUpdate.instructions}
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -3669,6 +3722,16 @@ const App: React.FC = () => {
                                         </div>
                                     );
                                 })()}
+                                <button
+                                    onClick={() => {
+                                        localStorage.setItem('acknowledged_version', systemUpdate.version_code);
+                                        setShowUpdateModal(false);
+                                    }}
+                                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl flex justify-center items-center gap-2 transition-colors mt-1 text-xs sm:text-sm border border-slate-200"
+                                >
+                                    <FiCheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                    Saya Sudah Menjalankan Update (Tutup Pesan Ini)
+                                </button>
                             </div>
                         )}
                     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { API_CONFIG } from '../constants';
-import { FiUploadCloud, FiCheckCircle, FiRefreshCw, FiFileText, FiHardDrive, FiClock } from 'react-icons/fi';
+import { FiUploadCloud, FiCheckCircle, FiRefreshCw, FiFileText, FiHardDrive, FiClock, FiAlertTriangle, FiInfo } from 'react-icons/fi';
 
 export const SystemUpdateAdmin: React.FC = () => {
     const [versionCode, setVersionCode] = useState('');
@@ -26,16 +26,43 @@ export const SystemUpdateAdmin: React.FC = () => {
     const checkLocalBackend = async () => {
         setIsCheckingLocal(true);
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2500);
-            const res = await fetch(`${API_CONFIG.BASE_URL}/backend-version`, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-                const data = await res.json();
-                setLocalBackend(data);
-            } else {
-                setLocalBackend(null);
+            const urls = [API_CONFIG.BASE_URL, 'http://127.0.0.1:8001', 'http://localhost:8001'];
+            let foundData: any = null;
+
+            for (const baseUrl of urls) {
+                if (foundData) break;
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 2000);
+                    const res = await fetch(`${baseUrl}/backend-version`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (res.ok) {
+                        foundData = await res.json();
+                        foundData.is_old = false;
+                        break;
+                    } else {
+                        // Check if root endpoint works (old main.py running)
+                        const rootCtrl = new AbortController();
+                        const rootTimeout = setTimeout(() => rootCtrl.abort(), 2000);
+                        const rootRes = await fetch(`${baseUrl}/`, { signal: rootCtrl.signal });
+                        clearTimeout(rootTimeout);
+                        if (rootRes.ok) {
+                            const rootJson = await rootRes.json();
+                            foundData = {
+                                version_code: rootJson.version_code || 'Versi Lama',
+                                file_path: 'Server masih memuat script lama (Silakan restart start_app.py)',
+                                is_old: true,
+                                status: 'ok'
+                            };
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    // try next url
+                }
             }
+
+            setLocalBackend(foundData);
         } catch (e) {
             setLocalBackend(null);
         } finally {
@@ -166,8 +193,8 @@ export const SystemUpdateAdmin: React.FC = () => {
                                     )}
                                 </div>
                             ) : (
-                                <p className="text-xs text-amber-600 font-medium mt-1">
-                                    ⚠️ Server backend lokal (port 8001) sedang tidak aktif atau tidak terjangkau.
+                                <p className="text-xs text-amber-600 font-medium mt-1 flex items-center gap-1">
+                                    <FiAlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" /> Server backend lokal (port 8001) sedang tidak aktif atau tidak terjangkau.
                                 </p>
                             )}
                         </div>
@@ -193,7 +220,9 @@ export const SystemUpdateAdmin: React.FC = () => {
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Versi Target Update (misal: v2.5.0)</label>
                         <input type="text" value={versionCode} onChange={e => setVersionCode(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm font-semibold" placeholder="v2.5.0" />
-                        <p className="text-[11px] text-gray-400 mt-1">💡 Saat user memperbarui main.py ke versi ini, pop-up akan <strong>otomatis tertutup sendiri</strong>.</p>
+                        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                            <FiInfo className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" /> Saat user memperbarui main.py ke versi ini, pop-up akan <strong>otomatis tertutup sendiri</strong>.
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-1">Judul Pop-Up</label>
