@@ -234,3 +234,29 @@ export const deleteHistoryByExcelFile = async (filename: string): Promise<void> 
         request.onerror = () => reject('Error deleting history locally by excel_filename');
     });
 };
+
+export const deleteProcessedItemsByOrderIds = async (orderIds: string[]): Promise<void> => {
+    if (!orderIds || orderIds.length === 0) return;
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([ITEMS_STORE], 'readwrite');
+        const store = transaction.objectStore(ITEMS_STORE);
+        const set = new Set(orderIds.map(String));
+        const request = store.openCursor();
+
+        request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            if (cursor) {
+                const val = cursor.value;
+                if (set.has(String(val.order_id)) || set.has(String(val.awb))) {
+                    cursor.delete();
+                }
+                cursor.continue();
+            } else {
+                resolve();
+            }
+        };
+        request.onerror = () => reject('Error deleting items by order_id locally');
+    });
+};
+

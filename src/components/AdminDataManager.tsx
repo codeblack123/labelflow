@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { FiTrash2, FiDatabase, FiRefreshCcw, FiCheckSquare, FiSquare, FiChevronLeft, FiChevronRight, FiCalendar, FiSearch } from 'react-icons/fi';
+import { FiTrash2, FiDatabase, FiRefreshCcw, FiCheckSquare, FiSquare, FiChevronLeft, FiChevronRight, FiCalendar, FiSearch, FiZap, FiAlertTriangle, FiCheckCircle, FiInfo } from 'react-icons/fi';
 import { supabase } from '../supabaseClient';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 import CustomTimePicker from './CustomTimePicker';
 import axios from 'axios';
 import { API_CONFIG } from '../constants';
+
 interface DataItem {
     id: string;
     [key: string]: any;
@@ -41,6 +42,12 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
     // Search
     const [searchQuery, setSearchQuery] = useState('');
     const [isMultiSearch, setIsMultiSearch] = useState(false);
+
+    // Quick Purge & Orphan Cleanup States
+    const [quickPurgeInput, setQuickPurgeInput] = useState('');
+    const [isQuickPurging, setIsQuickPurging] = useState(false);
+    const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
+    const [orphanScanResult, setOrphanScanResult] = useState<{ totalOrphans: number; orphanFilenames: string[] } | null>(null);
 
     // Keyboard listener for secret phrase "showdelete"
     useEffect(() => {
@@ -143,25 +150,11 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                 .select('*');
 
             const activeTenantId = user?.tenant_id || user?.username;
-            if (activeTenantId) {
+            const isDevOrAdmin = user?.role === 'developer' || user?.role === 'admin' || user?.username === 'developer' || user?.username === 'admin' || !user?.tenant_id;
+
+            if (activeTenantId && !isDevOrAdmin) {
                 if (activeTable === 'label_process_history') {
                     query = query.eq('tenant_id', activeTenantId);
-                } else if (activeTable === 'processed_items') {
-                    // Fetch excel_filenames for this tenant first
-                    const { data: tenantHistory } = await supabase
-                        .from('label_process_history')
-                        .select('excel_filename')
-                        .eq('tenant_id', activeTenantId);
-                    
-                    let validFilenames: string[] = [];
-                    if (tenantHistory && tenantHistory.length > 0) {
-                        validFilenames = tenantHistory.map((h: any) => h.excel_filename);
-                        // Using `.in` to filter processed_items
-                        query = query.in('excel_filename', validFilenames);
-                    } else {
-                        // If no history exists, ensure it returns empty by setting an impossible condition
-                        query = query.eq('id', '00000000-0000-0000-0000-000000000000');
-                    }
                 }
             }
 
@@ -169,7 +162,6 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
             if (filterDate) {
                 const dateColumn = activeTable === 'processed_items' ? 'date_processed' : 'created_at';
                 
-                // For local timezone safety, we just use string matching or greater than
                 const startOfDay = new Date(filterDate + 'T00:00:00');
                 const endOfDay = new Date(filterDate + 'T23:59:59');
                 
@@ -212,7 +204,7 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
             }
 
             setAllData(items || []);
-            setData(items || []); // Local filter will run, but that's fine since they match
+            setData(items || []);
             setCurrentPage(1);
             showToast?.(`✓ Ditemukan ${items?.length || 0} data dari server`);
         } catch (err: any) {
@@ -227,7 +219,6 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
         setLoading(true);
         setSelectedIds(new Set());
         try {
-            // Use correct order column for each table
             const orderColumn = activeTable === 'processed_items' ? 'processed_at' : 'created_at';
 
             let query = supabase
@@ -235,25 +226,11 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                 .select('*');
 
             const activeTenantId = user?.tenant_id || user?.username;
-            if (activeTenantId) {
+            const isDevOrAdmin = user?.role === 'developer' || user?.role === 'admin' || user?.username === 'developer' || user?.username === 'admin' || !user?.tenant_id;
+
+            if (activeTenantId && !isDevOrAdmin) {
                 if (activeTable === 'label_process_history') {
                     query = query.eq('tenant_id', activeTenantId);
-                } else if (activeTable === 'processed_items') {
-                    // Fetch excel_filenames for this tenant first
-                    const { data: tenantHistory } = await supabase
-                        .from('label_process_history')
-                        .select('excel_filename')
-                        .eq('tenant_id', activeTenantId);
-                    
-                    let validFilenames: string[] = [];
-                    if (tenantHistory && tenantHistory.length > 0) {
-                        validFilenames = tenantHistory.map((h: any) => h.excel_filename);
-                        // Using `.in` to filter processed_items
-                        query = query.in('excel_filename', validFilenames);
-                    } else {
-                        // If no history exists, ensure it returns empty by setting an impossible condition
-                        query = query.eq('id', '00000000-0000-0000-0000-000000000000');
-                    }
                 }
             }
 
@@ -292,19 +269,14 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
     };
 
     const toggleSelectAll = () => {
-        // Toggle behavior:
-        // 1. If everything in CURRENT filtered set (data) is already selected -> Clear selection
-        // 2. Otherwise -> Select everything in CURRENT filtered set
         const filteredIds = data.map(d => d.id);
         const allFilteredSelected = filteredIds.every(id => selectedIds.has(id));
 
         if (allFilteredSelected && filteredIds.length > 0) {
-            // Deselect all in filtered set
             const newSet = new Set(selectedIds);
             filteredIds.forEach(id => newSet.delete(id));
             setSelectedIds(newSet);
         } else {
-            // Select all in filtered set
             const newSet = new Set(selectedIds);
             filteredIds.forEach(id => newSet.add(id));
             setSelectedIds(newSet);
@@ -314,34 +286,116 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
     const handleDelete = async () => {
         if (selectedIds.size === 0) return;
         const idsToDelete = Array.from(selectedIds);
-        console.log('[DELETE] Attempting to delete', idsToDelete.length, 'items from', activeTable);
-        console.log('[DELETE] IDs:', idsToDelete);
 
         try {
-            // Bypass RLS silently failing by using backend Service Key endpoint
             const response = await axios.post(`${API_CONFIG.BASE_URL}/admin/delete`, {
                 table: activeTable,
                 ids: idsToDelete
             });
 
-            console.log('[DELETE] Response:', response.data);
-
             if (!response.data.success) {
                 throw new Error(response.data.message || 'Unknown server error');
             }
 
-            // Verify deletion was successful
             const deletedCount = response.data.deleted || idsToDelete.length;
             showToast?.(`✓ ${deletedCount} data berhasil dihapus`);
             setDeleteModalOpen(false);
             setSelectedIds(new Set());
 
-            // Refresh data from server to confirm deletion
             await fetchData();
         } catch (err: any) {
             console.error('[DELETE] Error:', err);
             showToast?.(`❌ Gagal menghapus: ${err.message || 'Unknown error'}`);
             alert('Gagal menghapus: ' + (err.message || JSON.stringify(err)));
+        }
+    };
+
+    // Quick Purge Handler
+    const handleQuickPurge = async () => {
+        if (!quickPurgeInput.trim()) return;
+        const targets = quickPurgeInput.split(/[\n,;\s]+/).map(t => t.trim()).filter(Boolean);
+        if (targets.length === 0) return;
+
+        setIsQuickPurging(true);
+        try {
+            const files = targets.filter(t => t.toLowerCase().endsWith('.xlsx') || t.toLowerCase().endsWith('.xls'));
+            const orderIds = targets.filter(t => !t.toLowerCase().endsWith('.xlsx') && !t.toLowerCase().endsWith('.xls'));
+
+            if (orderIds.length > 0) {
+                await axios.post(`${API_CONFIG.BASE_URL}/clean-duplicate-orders`, { order_ids: orderIds }).catch(() => {});
+                for (let i = 0; i < orderIds.length; i += 50) {
+                    const chunk = orderIds.slice(i, i + 50);
+                    await supabase.from('processed_items').delete().in('order_id', chunk);
+                    await supabase.from('processed_items').delete().in('awb', chunk);
+                }
+            }
+            for (const file of files) {
+                await axios.post(`${API_CONFIG.BASE_URL}/clean-duplicate-orders`, { excel_filename: file }).catch(() => {});
+                await supabase.from('processed_items').delete().eq('excel_filename', file);
+            }
+
+            showToast?.(`✓ Berhasil menghapus catatan duplikat untuk ${targets.length} item.`);
+            setQuickPurgeInput('');
+            await fetchData();
+        } catch (err: any) {
+            console.error('Quick purge failed:', err);
+            showToast?.(`❌ Gagal hapus: ${err.message}`);
+        } finally {
+            setIsQuickPurging(false);
+        }
+    };
+
+    // Orphan Scanner Handler
+    const handleScanOrphans = async () => {
+        setIsCleaningOrphans(true);
+        try {
+            const { data: histories } = await supabase.from('label_process_history').select('excel_filename');
+            const historyFilenames = new Set((histories || []).map((h: any) => h.excel_filename).filter(Boolean));
+
+            const { data: processed } = await supabase.from('processed_items').select('excel_filename');
+            const processedFilenames = Array.from(new Set((processed || []).map((p: any) => p.excel_filename).filter(Boolean)));
+
+            const orphanFilenames = processedFilenames.filter(f => !historyFilenames.has(f));
+            const orphanCount = (processed || []).filter((p: any) => !historyFilenames.has(p.excel_filename)).length;
+
+            setOrphanScanResult({
+                totalOrphans: orphanCount,
+                orphanFilenames
+            });
+
+            if (orphanCount === 0) {
+                showToast?.('✓ Tidak ada data yatim. Database processed_items sudah 100% sinkron!');
+            } else {
+                showToast?.(`⚠️ Ditemukan ${orphanCount} baris data yatim dari ${orphanFilenames.length} file.`);
+            }
+        } catch (err: any) {
+            console.error('Error scanning orphans:', err);
+            showToast?.(`❌ Gagal scan: ${err.message}`);
+        } finally {
+            setIsCleaningOrphans(false);
+        }
+    };
+
+    const handlePurgeOrphans = async () => {
+        if (!orphanScanResult || orphanScanResult.orphanFilenames.length === 0) return;
+        if (!window.confirm(`Hapus ${orphanScanResult.totalOrphans} data yatim dari database?`)) return;
+
+        setIsCleaningOrphans(true);
+        try {
+            for (const fname of orphanScanResult.orphanFilenames) {
+                await axios.post(`${API_CONFIG.BASE_URL}/clean-duplicate-orders`, {
+                    excel_filename: fname
+                }).catch(() => {});
+                await supabase.from('processed_items').delete().eq('excel_filename', fname);
+            }
+            showToast?.(`✓ Berhasil menghapus ${orphanScanResult.totalOrphans} data yatim!`);
+            setOrphanScanResult(null);
+            await fetchData();
+        } catch (err: any) {
+            console.error('Error purging orphans:', err);
+            showToast?.(`❌ Gagal bersihkan: ${err.message}`);
+        } finally {
+            setIsCleaningOrphans(false);
         }
     };
 
@@ -352,33 +406,14 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
         return ['id', 'excel_name', 'created_at'];
     };
 
-    // Format time only from date string
-    const formatTimeOnly = (dateStr: string) => {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    };
-
-    // Format date for display
-    const formatDate = (dateStr: string) => {
-        if (!dateStr) return '-';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('id-ID');
-    };
-
     const handleTimeClick = (fullTimestamp: string) => {
         if (!fullTimestamp) return;
+
         try {
             const dateObj = new Date(fullTimestamp);
-            // Get YYYY-MM-DD for date input
-            // Use local date string to avoid timezone shifts affecting the day
-            const offset = dateObj.getTimezoneOffset() * 60000;
-            const localDate = new Date(dateObj.getTime() - offset);
-            const dateStr = localDate.toISOString().split('T')[0];
-
+            const dateStr = fullTimestamp.slice(0, 10);
             setFilterDate(dateStr);
 
-            // Get HH:MM:SS for time input
             const timeStr = dateObj.toTimeString().slice(0, 8);
             setFilterTimeFrom(timeStr);
             setFilterTimeTo('');
@@ -395,22 +430,91 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
             {/* Header */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-lg font-bold text-gray-900">Kelola Data Supabase</h2>
-                    <p className="text-sm text-gray-500">Total: {data.length.toLocaleString()} data (dari {allData.length.toLocaleString()})</p>
+                    <h2 className="text-lg font-bold text-gray-900">Kelola Data Database</h2>
+                    <p className="text-sm text-gray-500">Total: {data.length.toLocaleString()} data (dari {allData.length.toLocaleString()} termuat)</p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => setActiveTable('processed_items')}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors ${activeTable === 'processed_items' ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors ${activeTable === 'processed_items' ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
-                        <FiDatabase className="w-4 h-4" /> processed_items
+                        <FiDatabase className="w-4 h-4" /> processed_items (Duplikat)
                     </button>
                     <button
                         onClick={() => setActiveTable('label_process_history')}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors ${activeTable === 'label_process_history' ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200' : 'text-gray-600 hover:bg-gray-50'}`}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors ${activeTable === 'label_process_history' ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
-                        <FiDatabase className="w-4 h-4" /> label_process_history
+                        <FiDatabase className="w-4 h-4" /> label_process_history (Riwayat)
                     </button>
+                </div>
+            </div>
+
+            {/* Quick Purge & Orphan Cleaner Toolbar */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Quick Purge Tool */}
+                <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                        <FiZap className="w-4 h-4 text-amber-500" />
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Hapus Cepat Catatan Duplikat (Order ID / AWB / Nama File)</h4>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-2.5">
+                        Masukkan Nomor Pesanan / No Resi / Nama File Excel yang ingin dibersihkan dari deteksi duplikat (pisahkan dengan koma/spasi/baris baru):
+                    </p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={quickPurgeInput}
+                            onChange={(e) => setQuickPurgeInput(e.target.value)}
+                            placeholder="Contoh: 260828JBW8BM7C, SPXID062588561668, atau file.xlsx"
+                            className="flex-1 px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleQuickPurge}
+                            disabled={isQuickPurging || !quickPurgeInput.trim()}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+                        >
+                            {isQuickPurging ? 'Menghapus...' : 'Hapus Duplikat'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Orphan Sweeper Tool */}
+                <div className="bg-gradient-to-br from-amber-50/50 to-orange-50/30 p-4 rounded-xl border border-amber-200/70 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2">
+                            <FiTrash2 className="w-4 h-4 text-orange-600" />
+                            <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Pembersih Data Yatim (Orphaned Duplicates)</h4>
+                        </div>
+                        {orphanScanResult && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                                {orphanScanResult.totalOrphans} data yatim
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-[11px] text-amber-800/80 mb-2.5">
+                        Bersihkan data duplikat yang riwayatnya sudah dihapus oleh user tetapi masih menyangkut di database:
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleScanOrphans}
+                            disabled={isCleaningOrphans}
+                            className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition-colors"
+                        >
+                            {isCleaningOrphans ? 'Memeriksa...' : '🔍 Scan Data Yatim'}
+                        </button>
+                        {orphanScanResult && orphanScanResult.totalOrphans > 0 && (
+                            <button
+                                type="button"
+                                onClick={handlePurgeOrphans}
+                                disabled={isCleaningOrphans}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors"
+                            >
+                                🧹 Hapus {orphanScanResult.totalOrphans} Data Yatim Sekarang
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -442,7 +546,7 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                     </button>
                 </div>
 
-                {/* Date Filter - Clickable calendar */}
+                {/* Date Filter */}
                 <div className="flex items-center gap-2">
                     <div
                         className="relative cursor-pointer flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100"
@@ -473,33 +577,30 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                 </div>
 
                 {/* Search Input */}
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <FiSearch className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                            {isMultiSearch ? (
-                                <textarea
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Input banyak ID/AWB (pisah baris/koma)..."
-                                    className="bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm w-64 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                                />
-                            ) : (
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Cari satu data..."
-                                    className="bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            )}
-                        </div>
+                <div className="flex items-center gap-2">
+                    <div className="relative flex items-center">
+                        <FiSearch className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    fetchDataFromServer();
+                                }
+                            }}
+                            placeholder={isMultiSearch ? "Cari banyak (pisahkan koma/enter)..." : (activeTable === 'processed_items' ? "Cari Order ID / AWB / File..." : "Cari nama file...")}
+                            className="pl-9 pr-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-56 md:w-64"
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-1">
                         <button
                             onClick={() => setIsMultiSearch(!isMultiSearch)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isMultiSearch ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${isMultiSearch ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                             title={isMultiSearch ? "Pindah ke cari satuan" : "Pindah ke cari banyak sekaligus"}
                         >
-                            {isMultiSearch ? 'Mode: Banyak' : 'Mode: Satuan'}
+                            {isMultiSearch ? 'Banyak' : 'Satuan'}
                         </button>
                         {searchQuery && (
                             <button
@@ -511,10 +612,10 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                         )}
                         <button
                             onClick={fetchDataFromServer}
-                            className="ml-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 transition-all"
-                            title="Cari langsung ke database untuk mencari data lama (> 5000 data)"
+                            className="ml-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 transition-all"
+                            title="Cari langsung ke database untuk mencari data lama"
                         >
-                            Cari Server (Data Lama)
+                            Cari Server
                         </button>
                     </div>
                 </div>
@@ -524,7 +625,6 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                     <div className="flex items-center gap-2 z-20">
                         <span className="text-sm text-gray-500 font-medium w-12">Waktu:</span>
 
-                        {/* Mode Toggle */}
                         <div className="flex bg-gray-100 rounded-lg p-0.5 h-8 items-center">
                             <button
                                 onClick={() => setTimeMatchMode('range')}
@@ -540,7 +640,6 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                             </button>
                         </div>
 
-                        {/* Custom Time Pickers */}
                         <CustomTimePicker
                             value={filterTimeFrom}
                             onChange={setFilterTimeFrom}
@@ -615,24 +714,18 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                                 {getDisplayColumns().map(col => (
                                     <td key={col} className="px-4 py-3 truncate max-w-[200px]" title={String(item[col] ?? '')}>
                                         {col === 'processed_at' ? (
-                                            // Show time only for processed_at - CLICKABLE
                                             <span
                                                 onClick={() => handleTimeClick(item[col])}
-                                                className="cursor-pointer text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                                                title="Klik untuk filter waktu persis ini"
+                                                className="cursor-pointer font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline px-1.5 py-0.5 rounded hover:bg-blue-100 transition-colors inline-block"
+                                                title="Klik untuk filter waktu sama"
                                             >
-                                                {formatTimeOnly(item[col])}
+                                                {item[col] ? new Date(item[col]).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
                                             </span>
-                                        ) : col.includes('_at') || col === 'date_processed' ? (
-                                            // Show full date for other date columns - CLICKABLE
-                                            <span
-                                                onClick={() => handleTimeClick(item[col])}
-                                                className="cursor-pointer text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                                                title="Klik untuk filter waktu persis ini"
-                                            >
-                                                {item[col] ? new Date(item[col]).toLocaleString('id-ID') : '-'}
-                                            </span>
-                                        ) : String(item[col] ?? '-')}
+                                        ) : col.includes('date') || col.includes('created') ? (
+                                            item[col] ? new Date(item[col]).toLocaleDateString('id-ID') : '-'
+                                        ) : (
+                                            String(item[col] ?? '-')
+                                        )}
                                     </td>
                                 ))}
                             </tr>
@@ -641,64 +734,37 @@ const AdminDataManager: React.FC<AdminDataManagerProps> = ({ showToast, user }) 
                 </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-gray-200 shadow-sm">
-                    <p className="text-sm text-gray-600">
-                        Halaman {currentPage} dari {totalPages} ({data.length.toLocaleString()} data)
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="p-2 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                            <FiChevronLeft className="w-4 h-4" />
-                        </button>
-
-                        {/* Page numbers */}
-                        <div className="flex items-center gap-1">
-                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                let pageNum;
-                                if (totalPages <= 5) {
-                                    pageNum = i + 1;
-                                } else if (currentPage <= 3) {
-                                    pageNum = i + 1;
-                                } else if (currentPage >= totalPages - 2) {
-                                    pageNum = totalPages - 4 + i;
-                                } else {
-                                    pageNum = currentPage - 2 + i;
-                                }
-                                return (
-                                    <button
-                                        key={pageNum}
-                                        onClick={() => setCurrentPage(pageNum)}
-                                        className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage === pageNum ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                                    >
-                                        {pageNum}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="p-2 rounded-lg border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                            <FiChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white px-6 py-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-500">
+                    Menampilkan <span className="font-medium">{data.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0}</span> - <span className="font-medium">{Math.min(currentPage * ITEMS_PER_PAGE, data.length)}</span> dari <span className="font-medium">{data.length.toLocaleString()}</span> data
                 </div>
-            )}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 transition-colors"
+                    >
+                        <FiChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-bold text-gray-700 px-2">
+                        Hal {currentPage} / {totalPages || 1}
+                    </span>
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage >= totalPages || totalPages === 0}
+                        className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 transition-colors"
+                    >
+                        <FiChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
 
-            {/* Delete Confirmation Modal */}
             <DeleteConfirmationModal
                 isOpen={deleteModalOpen}
                 onClose={() => setDeleteModalOpen(false)}
                 onConfirm={handleDelete}
-                itemName={`${selectedIds.size} data dari ${activeTable}`}
-                title="Konfirmasi Penghapusan Data"
+                count={selectedIds.size}
             />
         </div>
     );

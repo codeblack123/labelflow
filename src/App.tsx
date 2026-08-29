@@ -18,7 +18,7 @@ import Admin from './components/Admin';
 import Toolkit from './components/Toolkit';
 import FolderErrorModal from './components/FolderErrorModal';
 import GlobalNotificationModal from './components/GlobalNotificationModal';
-import { saveFileToDB, getFileFromDB, deleteFileFromDB, saveProcessedItemsToLocal, getProcessedItemsByOrderIds, saveHistoryToLocal, deleteHistoryFromLocal, deleteProcessedItemsByExcelFile, deleteHistoryByExcelFile } from './utils/db';
+import { saveFileToDB, getFileFromDB, deleteFileFromDB, saveProcessedItemsToLocal, getProcessedItemsByOrderIds, saveHistoryToLocal, deleteHistoryFromLocal, deleteProcessedItemsByExcelFile, deleteHistoryByExcelFile, deleteProcessedItemsByOrderIds } from './utils/db';
 import { saveUploadTesToFirebase } from './utils/firebaseUpload';
 import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
@@ -483,7 +483,34 @@ const App: React.FC = () => {
         loadAndCheckResets();
     }, []);
     const [processStats, setProcessStats] = useState<ProcessStats | null>(null);
-    const [duplicateData, setDuplicateData] = useState<{ count: number; items: any[] } | null>(null);
+    const [duplicateData, setDuplicateData] = useState<{ count: number; items: any[]; onForceReProcess?: () => Promise<void>; } | null>(null);
+    const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
+
+    const cleanDuplicateItemsFromDB = async (items: any[]) => {
+        try {
+            const orderIds: string[] = [];
+            for (const it of items) {
+                if (it.order_id) orderIds.push(String(it.order_id));
+                if (it.awb) orderIds.push(String(it.awb));
+            }
+            const uniqueIds = Array.from(new Set(orderIds.filter(Boolean)));
+            if (uniqueIds.length > 0) {
+                // 1. Delete from Supabase in chunks of 50
+                for (let i = 0; i < uniqueIds.length; i += 50) {
+                    const chunk = uniqueIds.slice(i, i + 50);
+                    await supabase.from('processed_items').delete().in('order_id', chunk);
+                    await supabase.from('processed_items').delete().in('awb', chunk);
+                }
+                // 2. Delete via backend endpoint if running
+                await axios.post(`${API_CONFIG.BASE_URL}/clean-duplicate-orders`, { order_ids: uniqueIds }).catch(() => {});
+                // 3. Delete from IndexedDB
+                await deleteProcessedItemsByOrderIds(uniqueIds).catch(() => {});
+            }
+            showToast(`✓ Berhasil membersihkan ${uniqueIds.length} data duplikat.`);
+        } catch (e) {
+            console.error('[CLEAN DUPLICATES] Failed:', e);
+        }
+    };
     const [isLocked, setIsLocked] = useState(false);  // Lock setelah proses
     const [toast, setToast] = useState<string | null>(null);
     const [processingTime, setProcessingTime] = useState<string | null>(null);
@@ -632,7 +659,7 @@ const App: React.FC = () => {
 
 
     const [processStats2, setProcessStats2] = useState<ProcessStats | null>(null);
-    const [duplicateData2, setDuplicateData2] = useState<{ count: number; items: any[] } | null>(null);
+    const [duplicateData2, setDuplicateData2] = useState<{ count: number; items: any[]; onForceReProcess?: () => Promise<void>; } | null>(null);
     const [isLocked2, setIsLocked2] = useState(false);
     const [processingTime2, setProcessingTime2] = useState<string | null>(null);
     const [lastProcessedPdfName2, setLastProcessedPdfName2] = useState<string | null>(null);
@@ -686,7 +713,7 @@ const App: React.FC = () => {
     const [testProgress, setTestProgress] = useState(0);
     const [testError, setTestError] = useState<string | undefined>();
     const [testProcessStats, setTestProcessStats] = useState<ProcessStats | null>(null);
-    const [testDuplicateData, setTestDuplicateData] = useState<{ count: number; items: any[] } | null>(null);
+    const [testDuplicateData, setTestDuplicateData] = useState<{ count: number; items: any[]; onForceReProcess?: () => Promise<void>; } | null>(null);
     const [testIsLocked, setTestIsLocked] = useState(false);
     const [testPdfPreviewUrl, setTestPdfPreviewUrl] = useState<string | null>(null);
     const [testLastProcessedPdfName, setTestLastProcessedPdfName] = useState<string | null>(null);
@@ -1600,7 +1627,7 @@ const App: React.FC = () => {
         return activeExcelFile;
     };
 
-    const startProcessing = async () => {
+    const startProcessing = async (forceProcess: boolean = false) => {
         if (!pickerName.trim()) {
             showToast('⚠️ Nama Picker wajib diisi sebelum memproses label!');
             return;
@@ -1633,80 +1660,91 @@ const App: React.FC = () => {
         }
 
         // 1. Check Duplicates Strict Blocking
-        setStatus(ProcessStatus.UPLOADING); // Show minimal feedback
-        showToast('⏳ Memvalidasi data...');
+        if (!forceProcess) {
+            setStatus(ProcessStatus.UPLOADING); // Show minimal feedback
+            showToast('⏳ Memvalidasi data...');
 
-        try {
-            // Use matched endpoint: only IDs confirmed in BOTH Excel AND PDF are checked
-            const matchFormData = new FormData();
-            matchFormData.append('excel_file', activeExcel);
-            pdfFiles.forEach(pdf => matchFormData.append('pdf_files', pdf));
+            try {
+                // Use matched endpoint: only IDs confirmed in BOTH Excel AND PDF are checked
+                const matchFormData = new FormData();
+                matchFormData.append('excel_file', activeExcel);
+                pdfFiles.forEach(pdf => matchFormData.append('pdf_files', pdf));
 
-            const extractResponse = await axios.post(
-                `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
-                matchFormData,
-                { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
-            );
+                const extractResponse = await axios.post(
+                    `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
+                    matchFormData,
+                    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+                );
 
-            const matchedIds: string[] = extractResponse.data?.ids || [];
+                const matchedIds: string[] = extractResponse.data?.ids || [];
 
-            if (matchedIds.length > 0) {
-                const BATCH_SIZE = 50;
-                const allDuplicates: any[] = [];
-                const chunks = [];
+                if (matchedIds.length > 0) {
+                    const BATCH_SIZE = 50;
+                    const allDuplicates: any[] = [];
+                    const chunks = [];
 
-                for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
-                    chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
-                }
+                    for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
+                        chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
+                    }
 
-                await Promise.all(chunks.map(async (chunk) => {
-                    let success = false;
+                    await Promise.all(chunks.map(async (chunk) => {
+                        let success = false;
 
-                    if (dbMode === 'cloud') {
-                        let attempts = 0;
-                        while (attempts < 3 && !success) {
+                        if (dbMode === 'cloud') {
+                            let attempts = 0;
+                            while (attempts < 3 && !success) {
+                                try {
+                                    const { data: orderData, error: orderError } = await supabase
+                                        .from('processed_items')
+                                        .select('order_id, date_processed')
+                                        .in('order_id', chunk);
+
+                                    if (orderError) throw orderError;
+                                    if (orderData) allDuplicates.push(...orderData);
+
+                                    success = true;
+                                } catch (err) {
+                                    attempts++;
+                                    if (attempts < 3) await new Promise(r => setTimeout(r, 1000));
+                                }
+                            }
+                        }
+
+                        if (!success || dbMode === 'local') {
                             try {
-                                const { data: orderData, error: orderError } = await supabase
-                                    .from('processed_items')
-                                    .select('order_id, date_processed')
-                                    .in('order_id', chunk);
-
-                                if (orderError) throw orderError;
-                                if (orderData) allDuplicates.push(...orderData);
-
-                                success = true;
-                            } catch (err) {
-                                attempts++;
-                                if (attempts < 3) await new Promise(r => setTimeout(r, 1000));
+                                const localData = await getProcessedItemsByOrderIds(chunk);
+                                if (localData && localData.length > 0) {
+                                    allDuplicates.push(...localData);
+                                }
+                            } catch (localErr) {
+                                console.error('[LOCAL] Local check failed:', localErr);
                             }
                         }
-                    }
+                    }));
 
-                    if (!success || dbMode === 'local') {
-                        try {
-                            const localData = await getProcessedItemsByOrderIds(chunk);
-                            if (localData && localData.length > 0) {
-                                allDuplicates.push(...localData);
+                    const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
+                        .map(id => allDuplicates.find(d => d.order_id === id));
+
+                    if (uniqueDuplicates.length > 0) {
+                        setDuplicateData({
+                            count: uniqueDuplicates.length,
+                            items: uniqueDuplicates,
+                            onForceReProcess: async () => {
+                                setIsCleaningDuplicates(true);
+                                await cleanDuplicateItemsFromDB(uniqueDuplicates);
+                                setIsCleaningDuplicates(false);
+                                setDuplicateData(null);
+                                await startProcessing(true);
                             }
-                        } catch (localErr) {
-                            console.error('[LOCAL] Local check failed:', localErr);
-                        }
+                        });
+                        setStatus(ProcessStatus.IDLE);
+                        return; // BLOCK PROCESS
                     }
-                }));
-
-                const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
-                    .map(id => allDuplicates.find(d => d.order_id === id));
-
-                if (uniqueDuplicates.length > 0) {
-                    setDuplicateData({ count: uniqueDuplicates.length, items: uniqueDuplicates });
-                    setStatus(ProcessStatus.IDLE);
-                    showToast(`⚠️ ${uniqueDuplicates.length} data dari PDF ini sudah pernah diproses.`);
-                    return; // BLOCK PROCESS
                 }
+            } catch (e) {
+                console.error("Duplicate check failed", e);
+                // If duplicate check API fails, we continue logic below and attempt processing
             }
-        } catch (e) {
-            console.error("Duplicate check failed", e);
-            // If duplicate check API fails, we continue logic below and attempt processing
         }
 
         setStatus(ProcessStatus.UPLOADING);
@@ -2158,7 +2196,7 @@ const App: React.FC = () => {
         showToast('✓ Form Upload Massal Pro direset (Siap batch baru)');
     };
 
-    const startBulkProProcessing = async () => {
+    const startBulkProProcessing = async (forceProcess: boolean = false) => {
         if (!pickerName.trim()) {
             showToast('⚠️ Nama Picker wajib diisi sebelum memproses label!');
             return;
@@ -2198,51 +2236,62 @@ const App: React.FC = () => {
                 const progressMsg = `⏳ [PRO] Memproses file ${i + 1} dari ${bulkProPdfFiles.length}: ${currentPdf.name}...`;
                 showToast(progressMsg);
 
-                // Step 1: Extract MATCHED Order IDs (intersection of Excel IDs and this PDF)
-                // Prevents false-positive duplicate detection for orders with empty AWB
-                const matchFormData = new FormData();
-                matchFormData.append('excel_file', activeBulkProExcel);
-                matchFormData.append('pdf_files', currentPdf);
+                if (!forceProcess) {
+                    // Step 1: Extract MATCHED Order IDs (intersection of Excel IDs and this PDF)
+                    // Prevents false-positive duplicate detection for orders with empty AWB
+                    const matchFormData = new FormData();
+                    matchFormData.append('excel_file', activeBulkProExcel);
+                    matchFormData.append('pdf_files', currentPdf);
 
-                const extractResponse = await axios.post(
-                    `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
-                    matchFormData,
-                    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 }
-                );
+                    const extractResponse = await axios.post(
+                        `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
+                        matchFormData,
+                        { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 }
+                    );
 
-                const matchedIds: string[] = extractResponse.data?.ids || [];
-                console.log('[BULK PRO] Matched IDs (Excel∩PDF):', matchedIds.length);
+                    const matchedIds: string[] = extractResponse.data?.ids || [];
+                    console.log('[BULK PRO] Matched IDs (Excel∩PDF):', matchedIds.length);
 
-                // Step 2: Check duplicates using ONLY matched IDs
-                showToast('⏳ Memeriksa duplikat...');
-                if (matchedIds.length > 0) {
-                    const BATCH_SIZE = 50;
-                    const allDuplicates: any[] = [];
-                    const chunks = [];
+                    // Step 2: Check duplicates using ONLY matched IDs
+                    showToast('⏳ Memeriksa duplikat...');
+                    if (matchedIds.length > 0) {
+                        const BATCH_SIZE = 50;
+                        const allDuplicates: any[] = [];
+                        const chunks = [];
 
-                    for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
-                        chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
-                    }
+                        for (let j = 0; j < matchedIds.length; j += BATCH_SIZE) {
+                            chunks.push(matchedIds.slice(j, j + BATCH_SIZE));
+                        }
 
-                    await Promise.all(chunks.map(async (chunk) => {
-                        // Check against order_id (ID Pesanan only - no AWB to avoid false positives)
-                        const { data: orderData } = await supabase
-                            .from('processed_items')
-                            .select('order_id, date_processed')
-                            .in('order_id', chunk);
+                        await Promise.all(chunks.map(async (chunk) => {
+                            // Check against order_id (ID Pesanan only - no AWB to avoid false positives)
+                            const { data: orderData } = await supabase
+                                .from('processed_items')
+                                .select('order_id, date_processed')
+                                .in('order_id', chunk);
 
-                        if (orderData) allDuplicates.push(...orderData);
-                    }));
+                            if (orderData) allDuplicates.push(...orderData);
+                        }));
 
-                    // Deduplicate the results
-                    const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
-                        .map(id => allDuplicates.find(d => d.order_id === id));
+                        // Deduplicate the results
+                        const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
+                            .map(id => allDuplicates.find(d => d.order_id === id));
 
-                    if (uniqueDuplicates.length > 0) {
-                        setDuplicateData({ count: uniqueDuplicates.length, items: uniqueDuplicates });
-                        setBulkProStatus(ProcessStatus.IDLE);
-                        showToast(`⚠️ ${uniqueDuplicates.length} data dari PDF ini sudah pernah diproses`);
-                        return; // BLOCK PROCESS
+                        if (uniqueDuplicates.length > 0) {
+                            setDuplicateData({
+                                count: uniqueDuplicates.length,
+                                items: uniqueDuplicates,
+                                onForceReProcess: async () => {
+                                    setIsCleaningDuplicates(true);
+                                    await cleanDuplicateItemsFromDB(uniqueDuplicates);
+                                    setIsCleaningDuplicates(false);
+                                    setDuplicateData(null);
+                                    await startBulkProProcessing(true);
+                                }
+                            });
+                            setBulkProStatus(ProcessStatus.IDLE);
+                            return; // BLOCK PROCESS
+                        }
                     }
                 }
 
@@ -2990,7 +3039,7 @@ const App: React.FC = () => {
         }
     };
 
-    const startTestProcessing = async () => {
+    const startTestProcessing = async (forceProcess: boolean = false) => {
         if (!pickerName.trim()) {
             showToast('⚠️ Nama Picker wajib diisi sebelum memproses label!');
             return;
@@ -3023,80 +3072,91 @@ const App: React.FC = () => {
         }
 
         // 1. Check Duplicates Strict Blocking
-        setTestStatus(ProcessStatus.UPLOADING); // Show minimal feedback
-        showToast('⏳ Memvalidasi data...');
+        if (!forceProcess) {
+            setTestStatus(ProcessStatus.UPLOADING); // Show minimal feedback
+            showToast('⏳ Memvalidasi data...');
 
-        try {
-            // Use matched endpoint: only IDs confirmed in BOTH Excel AND PDF are checked
-            const matchFormData = new FormData();
-            matchFormData.append('excel_file', activeTestExcel);
-            testPdfFiles.forEach(pdf => matchFormData.append('pdf_files', pdf));
+            try {
+                // Use matched endpoint: only IDs confirmed in BOTH Excel AND PDF are checked
+                const matchFormData = new FormData();
+                matchFormData.append('excel_file', activeTestExcel);
+                testPdfFiles.forEach(pdf => matchFormData.append('pdf_files', pdf));
 
-            const extractResponse = await axios.post(
-                `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
-                matchFormData,
-                { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
-            );
+                const extractResponse = await axios.post(
+                    `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
+                    matchFormData,
+                    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+                );
 
-            const matchedIds: string[] = extractResponse.data?.ids || [];
+                const matchedIds: string[] = extractResponse.data?.ids || [];
 
-            if (matchedIds.length > 0) {
-                const BATCH_SIZE = 50;
-                const allDuplicates: any[] = [];
-                const chunks = [];
+                if (matchedIds.length > 0) {
+                    const BATCH_SIZE = 50;
+                    const allDuplicates: any[] = [];
+                    const chunks = [];
 
-                for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
-                    chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
-                }
+                    for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
+                        chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
+                    }
 
-                await Promise.all(chunks.map(async (chunk) => {
-                    let success = false;
+                    await Promise.all(chunks.map(async (chunk) => {
+                        let success = false;
 
-                    if (dbMode === 'cloud') {
-                        let attempts = 0;
-                        while (attempts < 3 && !success) {
+                        if (dbMode === 'cloud') {
+                            let attempts = 0;
+                            while (attempts < 3 && !success) {
+                                try {
+                                    const { data: orderData, error: orderError } = await supabase
+                                        .from('processed_items')
+                                        .select('order_id, date_processed')
+                                        .in('order_id', chunk);
+
+                                    if (orderError) throw orderError;
+                                    if (orderData) allDuplicates.push(...orderData);
+
+                                    success = true;
+                                } catch (err) {
+                                    attempts++;
+                                    if (attempts < 3) await new Promise(r => setTimeout(r, 1000));
+                                }
+                            }
+                        }
+
+                        if (!success || dbMode === 'local') {
                             try {
-                                const { data: orderData, error: orderError } = await supabase
-                                    .from('processed_items')
-                                    .select('order_id, date_processed')
-                                    .in('order_id', chunk);
-
-                                if (orderError) throw orderError;
-                                if (orderData) allDuplicates.push(...orderData);
-
-                                success = true;
-                            } catch (err) {
-                                attempts++;
-                                if (attempts < 3) await new Promise(r => setTimeout(r, 1000));
+                                const localData = await getProcessedItemsByOrderIds(chunk);
+                                if (localData && localData.length > 0) {
+                                    allDuplicates.push(...localData);
+                                }
+                            } catch (localErr) {
+                                console.error('[LOCAL] Local check failed:', localErr);
                             }
                         }
-                    }
+                    }));
 
-                    if (!success || dbMode === 'local') {
-                        try {
-                            const localData = await getProcessedItemsByOrderIds(chunk);
-                            if (localData && localData.length > 0) {
-                                allDuplicates.push(...localData);
+                    const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
+                        .map(id => allDuplicates.find(d => d.order_id === id));
+
+                    if (uniqueDuplicates.length > 0) {
+                        setTestDuplicateData({
+                            count: uniqueDuplicates.length,
+                            items: uniqueDuplicates,
+                            onForceReProcess: async () => {
+                                setIsCleaningDuplicates(true);
+                                await cleanDuplicateItemsFromDB(uniqueDuplicates);
+                                setIsCleaningDuplicates(false);
+                                setTestDuplicateData(null);
+                                await startTestProcessing(true);
                             }
-                        } catch (localErr) {
-                            console.error('[LOCAL] Local check failed:', localErr);
-                        }
+                        });
+                        setTestStatus(ProcessStatus.IDLE);
+                        return; // BLOCK PROCESS
                     }
-                }));
-
-                const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
-                    .map(id => allDuplicates.find(d => d.order_id === id));
-
-                if (uniqueDuplicates.length > 0) {
-                    setTestDuplicateData({ count: uniqueDuplicates.length, items: uniqueDuplicates });
-                    setTestStatus(ProcessStatus.IDLE);
-                    showToast(`⚠️ ${uniqueDuplicates.length} data dari PDF ini sudah pernah diproses.`);
-                    return; // BLOCK PROCESS
                 }
+            } catch (e) {
+                console.error("Duplicate check failed", e);
+                // If duplicate check API fails, we continue logic below and attempt processing
             }
-        } catch (e) {
-            console.error("Duplicate check failed", e);
-            // If duplicate check API fails, we continue logic below and attempt processing
         }
 
         setTestStatus(ProcessStatus.UPLOADING);
@@ -3305,7 +3365,7 @@ const App: React.FC = () => {
         showToast('✓ Siap untuk batch PDF berikutnya');
     };
 
-    const startFlexProcessing = async () => {
+    const startFlexProcessing = async (forceProcess: boolean = false) => {
         if (!pickerName.trim()) {
             showToast('⚠️ Nama Picker wajib diisi sebelum memproses label!');
             return;
@@ -3334,75 +3394,90 @@ const App: React.FC = () => {
             return;
         }
 
-        setFlexStatus(ProcessStatus.UPLOADING);
-        showToast('⏳ Memvalidasi data...');
+        if (!forceProcess) {
+            setFlexStatus(ProcessStatus.UPLOADING);
+            showToast('⏳ Memvalidasi data...');
+
+            try {
+                const matchFormData = new FormData();
+                matchFormData.append('excel_file', activeFlexExcel);
+                flexPdfFiles.forEach(pdf => matchFormData.append('pdf_files', pdf));
+
+                const extractResponse = await axios.post(
+                    `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
+                    matchFormData,
+                    { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+                );
+
+                const matchedIds: string[] = extractResponse.data?.ids || [];
+
+                if (matchedIds.length > 0) {
+                    const BATCH_SIZE = 50;
+                    const allDuplicates: any[] = [];
+                    const chunks = [];
+
+                    for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
+                        chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
+                    }
+
+                    await Promise.all(chunks.map(async (chunk) => {
+                        let success = false;
+                        if (dbMode === 'cloud') {
+                            let attempts = 0;
+                            while (attempts < 3 && !success) {
+                                try {
+                                    const { data: orderData, error: orderError } = await supabase
+                                        .from('processed_items')
+                                        .select('order_id, date_processed')
+                                        .in('order_id', chunk);
+
+                                    if (orderError) throw orderError;
+                                    if (orderData) allDuplicates.push(...orderData);
+                                    success = true;
+                                } catch (err) {
+                                    attempts++;
+                                    if (attempts < 3) await new Promise(r => setTimeout(r, 1000));
+                                }
+                            }
+                        }
+
+                        if (!success || dbMode === 'local') {
+                            try {
+                                const localData = await getProcessedItemsByOrderIds(chunk);
+                                if (localData && localData.length > 0) {
+                                    allDuplicates.push(...localData);
+                                }
+                            } catch (localErr) {
+                                console.error('[LOCAL] Local check failed:', localErr);
+                            }
+                        }
+                    }));
+
+                    const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
+                        .map(id => allDuplicates.find(d => d.order_id === id));
+
+                    if (uniqueDuplicates.length > 0) {
+                        setDuplicateData({
+                            count: uniqueDuplicates.length,
+                            items: uniqueDuplicates,
+                            onForceReProcess: async () => {
+                                setIsCleaningDuplicates(true);
+                                await cleanDuplicateItemsFromDB(uniqueDuplicates);
+                                setIsCleaningDuplicates(false);
+                                setDuplicateData(null);
+                                await startFlexProcessing(true);
+                            }
+                        });
+                        setFlexStatus(ProcessStatus.IDLE);
+                        return; 
+                    }
+                }
+            } catch (e) {
+                console.error("Duplicate check failed", e);
+            }
+        }
 
         try {
-            const matchFormData = new FormData();
-            matchFormData.append('excel_file', activeFlexExcel);
-            flexPdfFiles.forEach(pdf => matchFormData.append('pdf_files', pdf));
-
-            const extractResponse = await axios.post(
-                `${API_CONFIG.BASE_URL}/extract-matched-order-ids`,
-                matchFormData,
-                { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
-            );
-
-            const matchedIds: string[] = extractResponse.data?.ids || [];
-
-            if (matchedIds.length > 0) {
-                const BATCH_SIZE = 50;
-                const allDuplicates: any[] = [];
-                const chunks = [];
-
-                for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
-                    chunks.push(matchedIds.slice(i, i + BATCH_SIZE));
-                }
-
-                await Promise.all(chunks.map(async (chunk) => {
-                    let success = false;
-                    if (dbMode === 'cloud') {
-                        let attempts = 0;
-                        while (attempts < 3 && !success) {
-                            try {
-                                const { data: orderData, error: orderError } = await supabase
-                                    .from('processed_items')
-                                    .select('order_id, date_processed')
-                                    .in('order_id', chunk);
-
-                                if (orderError) throw orderError;
-                                if (orderData) allDuplicates.push(...orderData);
-                                success = true;
-                            } catch (err) {
-                                attempts++;
-                                if (attempts < 3) await new Promise(r => setTimeout(r, 1000));
-                            }
-                        }
-                    }
-
-                    if (!success || dbMode === 'local') {
-                        try {
-                            const localData = await getProcessedItemsByOrderIds(chunk);
-                            if (localData && localData.length > 0) {
-                                allDuplicates.push(...localData);
-                            }
-                        } catch (localErr) {
-                            console.error('[LOCAL] Local check failed:', localErr);
-                        }
-                    }
-                }));
-
-                const uniqueDuplicates = Array.from(new Set(allDuplicates.map(d => d.order_id)))
-                    .map(id => allDuplicates.find(d => d.order_id === id));
-
-                if (uniqueDuplicates.length > 0) {
-                    setDuplicateData({ count: uniqueDuplicates.length, items: uniqueDuplicates });
-                    setFlexStatus(ProcessStatus.IDLE);
-                    showToast(`⚠️ ${uniqueDuplicates.length} data dari PDF ini sudah pernah diproses.`);
-                    return; 
-                }
-            }
-
             setFlexStatus(ProcessStatus.PROCESSING);
             setFlexProgress(10);
             setFlexError(undefined);
@@ -7829,6 +7904,20 @@ const App: React.FC = () => {
                 isOpen={!!folderError}
                 onClose={() => setFolderError(null)}
                 folderName={folderError || "PL"}
+            />
+
+            {/* Duplicate Error Modal */}
+            <DuplicateErrorModal
+                isOpen={!!duplicateData || !!duplicateData2 || !!testDuplicateData}
+                onClose={() => {
+                    setDuplicateData(null);
+                    setDuplicateData2(null);
+                    setTestDuplicateData(null);
+                }}
+                duplicateCount={(duplicateData?.count || duplicateData2?.count || testDuplicateData?.count || 0)}
+                duplicates={(duplicateData?.items || duplicateData2?.items || testDuplicateData?.items || [])}
+                onForceReProcess={duplicateData?.onForceReProcess || duplicateData2?.onForceReProcess || testDuplicateData?.onForceReProcess}
+                isProcessing={isCleaningDuplicates}
             />
 
             {/* PIN Modal untuk Batalkan (Undo) */}

@@ -93,6 +93,115 @@ async def get_backend_version():
         "server_time": datetime.now().isoformat()
     }
 
+@app.delete("/history/{record_id}")
+async def delete_history_record(record_id: str, username: Optional[str] = None):
+    """
+    Deletes a history record from label_process_history and thoroughly cleans up
+    all associated records from processed_items in Supabase.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+            # 1. Fetch history record to get excel_filename & matched_awbs
+            h_res = await client.get(
+                f"{SUPABASE_URL}/rest/v1/label_process_history?id=eq.{record_id}&select=*",
+                headers=headers
+            )
+            excel_filename = None
+            matched_awbs = []
+            if h_res.status_code == 200:
+                h_data = h_res.json()
+                if h_data and len(h_data) > 0:
+                    excel_filename = h_data[0].get("excel_filename")
+                    matched_awbs = h_data[0].get("matched_awbs", []) or []
+
+            # 2. Delete from processed_items by excel_filename
+            if excel_filename:
+                encoded_excel = urllib.parse.quote(excel_filename.strip())
+                await client.delete(
+                    f"{SUPABASE_URL}/rest/v1/processed_items?excel_filename=eq.{encoded_excel}",
+                    headers=headers
+                )
+
+            # 3. Extract order_ids and awbs from matched_awbs
+            order_ids = []
+            for item in matched_awbs:
+                try:
+                    if isinstance(item, str) and item.strip().startswith("{"):
+                        p = json.loads(item)
+                        if p.get("id_pesanan"): order_ids.append(str(p["id_pesanan"]))
+                        if p.get("awb"): order_ids.append(str(p["awb"]))
+                    elif isinstance(item, dict):
+                        if item.get("id_pesanan"): order_ids.append(str(item["id_pesanan"]))
+                        if item.get("awb"): order_ids.append(str(item["awb"]))
+                    elif item:
+                        order_ids.append(str(item))
+                except Exception:
+                    if item: order_ids.append(str(item))
+
+            if order_ids:
+                unique_ids = list(set(order_ids))
+                for i in range(0, len(unique_ids), 50):
+                    chunk = unique_ids[i:i+50]
+                    filter_str = urllib.parse.quote(",".join([f'"{o}"' for o in chunk]))
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/processed_items?order_id=in.({filter_str})",
+                        headers=headers
+                    )
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/processed_items?awb=in.({filter_str})",
+                        headers=headers
+                    )
+
+            # 4. Delete from label_process_history
+            await client.delete(
+                f"{SUPABASE_URL}/rest/v1/label_process_history?id=eq.{record_id}",
+                headers=headers
+            )
+
+        return {"status": "ok", "message": f"Record {record_id} and associated processed_items deleted"}
+    except Exception as e:
+        print(f"[HISTORY DELETE] Error: {e}")
+        return {"status": "ok", "warning": str(e)}
+
+@app.post("/clean-duplicate-orders")
+async def clean_duplicate_orders(request: Request):
+    """
+    Purges specified duplicate order_ids or awbs from processed_items table.
+    Used when a user wants to force re-process labels that were flagged as duplicates.
+    """
+    try:
+        body = await request.json()
+        order_ids = body.get("order_ids", [])
+        excel_filename = body.get("excel_filename")
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+            if excel_filename:
+                encoded = urllib.parse.quote(excel_filename.strip())
+                await client.delete(
+                    f"{SUPABASE_URL}/rest/v1/processed_items?excel_filename=eq.{encoded}",
+                    headers=headers
+                )
+            if order_ids:
+                unique_ids = list(set([str(x) for x in order_ids if x]))
+                for i in range(0, len(unique_ids), 50):
+                    chunk = unique_ids[i:i+50]
+                    filter_str = urllib.parse.quote(",".join([f'"{o}"' for o in chunk]))
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/processed_items?order_id=in.({filter_str})",
+                        headers=headers
+                    )
+                    await client.delete(
+                        f"{SUPABASE_URL}/rest/v1/processed_items?awb=in.({filter_str})",
+                        headers=headers
+                    )
+
+        return {"status": "ok", "message": "Duplicate items cleared successfully"}
+    except Exception as e:
+        print(f"[CLEAN DUPLICATES] Error: {e}")
+        return {"status": "error", "detail": str(e)}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

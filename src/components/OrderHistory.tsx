@@ -209,7 +209,11 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
             }
 
             // 2. Delete from Supabase (Backend API)
-            await axios.delete(`${API_CONFIG.BASE_URL}/history/${record.id}?username=${encodeURIComponent(user?.username || '')}`);
+            try {
+                await axios.delete(`${API_CONFIG.BASE_URL}/history/${record.id}?username=${encodeURIComponent(user?.username || '')}`);
+            } catch (beErr) {
+                console.warn('[BACKEND] Backend delete endpoint warning:', beErr);
+            }
 
             // 2.5 Hapus ke akarnya (processed_items) langsung lewat Supabase client
             try {
