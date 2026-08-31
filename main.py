@@ -9050,6 +9050,35 @@ async def import_sku_vip_50k(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def find_excel_headers(df):
+    def find_cols(cols):
+        c_id = next((c for c in cols if any(k in str(c).strip().upper() for k in [
+            'ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 
+            'ORDER ID', 'ORDER NO', 'ORDER NUMBER', 'NO ORDER', 'NOMOR ORDER', 
+            'AWB', 'NO. RESI', 'NO RESI', 'RESI', 'NOMOR RESI', 'ORDER_ID', 'ID_PESANAN'
+        ])), None)
+        c_sku = next((c for c in cols if any(k in str(c).strip().upper() for k in [
+            'MSKU', 'SKU INDUK', 'KODE SKU', 'MASTER SKU', 'SKU', 
+            'NOMOR REFERENSI SKU', 'NOMOR SKU', 'SKU REFERENSI', 'KODE BARANG', 'ITEM SKU', 'PRODUCT SKU'
+        ])), None)
+        return c_id, c_sku
+
+    c_id, c_sku = find_cols(df.columns)
+    if c_id and c_sku:
+        return df, c_id, c_sku
+
+    for row_idx in range(min(15, len(df))):
+        row_vals = [str(val).strip() for val in df.iloc[row_idx].values]
+        c_id_cand, c_sku_cand = find_cols(row_vals)
+        if c_id_cand and c_sku_cand:
+            new_df = df.iloc[row_idx + 1:].copy().reset_index(drop=True)
+            new_df.columns = [str(v).strip() for v in df.iloc[row_idx].values]
+            c_id_final, c_sku_final = find_cols(new_df.columns)
+            return new_df, c_id_final, c_sku_final
+
+    return df, c_id, c_sku
+
+
 @app.post("/toolkit/orderan-kilat-50k")
 async def process_orderan_kilat_50k(file: UploadFile = File(...)):
     try:
@@ -9059,11 +9088,11 @@ async def process_orderan_kilat_50k(file: UploadFile = File(...)):
         if len(df) == 0:
             raise HTTPException(status_code=400, detail="File Excel kosong")
             
-        col_id_pesanan = next((c for c in df.columns if any(k in str(c).upper() for k in ['ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 'ORDER ID', 'AWB', 'NO. RESI', 'NO RESI', 'RESI'])), None)
-        col_msku = next((c for c in df.columns if any(k in str(c).upper() for k in ['MSKU', 'SKU INDUK', 'KODE SKU', 'SKU', 'NOMOR REFERENSI SKU', 'NOMOR SKU'])), None)
+        df, col_id_pesanan, col_msku = find_excel_headers(df)
         
         if not col_id_pesanan or not col_msku:
-            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan pada file Excel Anda")
+            detected_cols = ", ".join([str(c) for c in list(df.columns)[:6]])
+            raise HTTPException(status_code=400, detail=f"Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan. Kolom terdeteksi: [{detected_cols}]")
             
         # Ambil data SKU VIP 50K dari Supabase
         vip_data = await supabase_fetch("GET", "sku_vip_50k?select=sku&limit=100000")
@@ -9273,11 +9302,11 @@ async def process_orderan_kilat_10k(file: UploadFile = File(...)):
         if len(df) == 0:
             raise HTTPException(status_code=400, detail="File Excel kosong")
             
-        col_id_pesanan = next((c for c in df.columns if any(k in str(c).upper() for k in ['ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 'ORDER ID', 'AWB', 'NO. RESI', 'NO RESI', 'RESI'])), None)
-        col_msku = next((c for c in df.columns if any(k in str(c).upper() for k in ['MSKU', 'SKU INDUK', 'KODE SKU', 'SKU', 'NOMOR REFERENSI SKU', 'NOMOR SKU'])), None)
+        df, col_id_pesanan, col_msku = find_excel_headers(df)
         
         if not col_id_pesanan or not col_msku:
-            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan pada file Excel Anda")
+            detected_cols = ", ".join([str(c) for c in list(df.columns)[:6]])
+            raise HTTPException(status_code=400, detail=f"Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan. Kolom terdeteksi: [{detected_cols}]")
             
         vip_data = await supabase_fetch("GET", "sku_vip_10k?select=sku&limit=100000")
         vip_skus = {str(e['sku']).strip().upper() for e in vip_data if e and e.get('sku')} if vip_data else set()
@@ -9486,11 +9515,11 @@ async def process_orderan_kilat_20k(file: UploadFile = File(...)):
         if len(df) == 0:
             raise HTTPException(status_code=400, detail="File Excel kosong")
             
-        col_id_pesanan = next((c for c in df.columns if any(k in str(c).upper() for k in ['ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 'ORDER ID', 'AWB', 'NO. RESI', 'NO RESI', 'RESI'])), None)
-        col_msku = next((c for c in df.columns if any(k in str(c).upper() for k in ['MSKU', 'SKU INDUK', 'KODE SKU', 'SKU', 'NOMOR REFERENSI SKU', 'NOMOR SKU'])), None)
+        df, col_id_pesanan, col_msku = find_excel_headers(df)
         
         if not col_id_pesanan or not col_msku:
-            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan pada file Excel Anda")
+            detected_cols = ", ".join([str(c) for c in list(df.columns)[:6]])
+            raise HTTPException(status_code=400, detail=f"Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan. Kolom terdeteksi: [{detected_cols}]")
             
         vip_data = await supabase_fetch("GET", "sku_vip_20k?select=sku&limit=100000")
         vip_skus = {str(e['sku']).strip().upper() for e in vip_data if e and e.get('sku')} if vip_data else set()
