@@ -9059,15 +9059,15 @@ async def process_orderan_kilat_50k(file: UploadFile = File(...)):
         if len(df) == 0:
             raise HTTPException(status_code=400, detail="File Excel kosong")
             
-        col_id_pesanan = next((c for c in df.columns if 'ID PESANAN' in str(c).upper() or 'NO. PESANAN' in str(c).upper() or 'AWB' in str(c).upper()), None)
-        col_msku = next((c for c in df.columns if 'MSKU' in str(c).upper()), None)
+        col_id_pesanan = next((c for c in df.columns if any(k in str(c).upper() for k in ['ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 'ORDER ID', 'AWB', 'NO. RESI', 'NO RESI', 'RESI'])), None)
+        col_msku = next((c for c in df.columns if any(k in str(c).upper() for k in ['MSKU', 'SKU INDUK', 'KODE SKU', 'SKU', 'NOMOR REFERENSI SKU', 'NOMOR SKU'])), None)
         
         if not col_id_pesanan or not col_msku:
-            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' tidak ditemukan")
+            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan pada file Excel Anda")
             
         # Ambil data SKU VIP 50K dari Supabase
         vip_data = await supabase_fetch("GET", "sku_vip_50k?select=sku&limit=100000")
-        vip_skus = {e['sku'] for e in vip_data} if vip_data else set()
+        vip_skus = {str(e['sku']).strip().upper() for e in vip_data if e and e.get('sku')} if vip_data else set()
         
         if not vip_skus:
             raise HTTPException(status_code=400, detail="Data SKU VIP (>50K) masih kosong di database")
@@ -9079,7 +9079,7 @@ async def process_orderan_kilat_50k(file: UploadFile = File(...)):
         
         vip_order_ids = set()
         for idx, row in df_ffill.iterrows():
-            msku = str(row[col_msku]).strip()
+            msku = str(row[col_msku]).strip().upper()
             order_id = str(row[col_id_pesanan]).strip()
             if msku in vip_skus:
                 vip_order_ids.add(order_id)
@@ -9273,14 +9273,14 @@ async def process_orderan_kilat_10k(file: UploadFile = File(...)):
         if len(df) == 0:
             raise HTTPException(status_code=400, detail="File Excel kosong")
             
-        col_id_pesanan = next((c for c in df.columns if 'ID PESANAN' in str(c).upper() or 'NO. PESANAN' in str(c).upper() or 'AWB' in str(c).upper()), None)
-        col_msku = next((c for c in df.columns if 'MSKU' in str(c).upper()), None)
+        col_id_pesanan = next((c for c in df.columns if any(k in str(c).upper() for k in ['ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 'ORDER ID', 'AWB', 'NO. RESI', 'NO RESI', 'RESI'])), None)
+        col_msku = next((c for c in df.columns if any(k in str(c).upper() for k in ['MSKU', 'SKU INDUK', 'KODE SKU', 'SKU', 'NOMOR REFERENSI SKU', 'NOMOR SKU'])), None)
         
         if not col_id_pesanan or not col_msku:
-            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' tidak ditemukan")
+            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan pada file Excel Anda")
             
         vip_data = await supabase_fetch("GET", "sku_vip_10k?select=sku&limit=100000")
-        vip_skus = {e['sku'] for e in vip_data} if vip_data else set()
+        vip_skus = {str(e['sku']).strip().upper() for e in vip_data if e and e.get('sku')} if vip_data else set()
         
         if not vip_skus:
             raise HTTPException(status_code=400, detail="Data SKU VIP (>10K) masih kosong di database")
@@ -9292,7 +9292,7 @@ async def process_orderan_kilat_10k(file: UploadFile = File(...)):
         
         vip_order_ids = set()
         for idx, row in df_ffill.iterrows():
-            msku = str(row[col_msku]).strip()
+            msku = str(row[col_msku]).strip().upper()
             order_id = str(row[col_id_pesanan]).strip()
             if msku in vip_skus:
                 vip_order_ids.add(order_id)
@@ -9486,14 +9486,14 @@ async def process_orderan_kilat_20k(file: UploadFile = File(...)):
         if len(df) == 0:
             raise HTTPException(status_code=400, detail="File Excel kosong")
             
-        col_id_pesanan = next((c for c in df.columns if 'ID PESANAN' in str(c).upper() or 'NO. PESANAN' in str(c).upper() or 'AWB' in str(c).upper()), None)
-        col_msku = next((c for c in df.columns if 'MSKU' in str(c).upper()), None)
+        col_id_pesanan = next((c for c in df.columns if any(k in str(c).upper() for k in ['ID PESANAN', 'NO. PESANAN', 'NO PESANAN', 'NOMOR PESANAN', 'ORDER ID', 'AWB', 'NO. RESI', 'NO RESI', 'RESI'])), None)
+        col_msku = next((c for c in df.columns if any(k in str(c).upper() for k in ['MSKU', 'SKU INDUK', 'KODE SKU', 'SKU', 'NOMOR REFERENSI SKU', 'NOMOR SKU'])), None)
         
         if not col_id_pesanan or not col_msku:
-            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' tidak ditemukan")
+            raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' / 'SKU' tidak ditemukan pada file Excel Anda")
             
         vip_data = await supabase_fetch("GET", "sku_vip_20k?select=sku&limit=100000")
-        vip_skus = {e['sku'] for e in vip_data} if vip_data else set()
+        vip_skus = {str(e['sku']).strip().upper() for e in vip_data if e and e.get('sku')} if vip_data else set()
         
         if not vip_skus:
             raise HTTPException(status_code=400, detail="Data SKU VIP (>20K) masih kosong di database")
@@ -9505,7 +9505,7 @@ async def process_orderan_kilat_20k(file: UploadFile = File(...)):
         
         vip_order_ids = set()
         for idx, row in df_ffill.iterrows():
-            msku = str(row[col_msku]).strip()
+            msku = str(row[col_msku]).strip().upper()
             order_id = str(row[col_id_pesanan]).strip()
             if msku in vip_skus:
                 vip_order_ids.add(order_id)
