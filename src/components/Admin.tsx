@@ -14,6 +14,8 @@ import AdminNotificationManager from './AdminNotificationManager';
 import AdminUserManager from './AdminUserManager';
 import AdminBarangKhusus from './AdminBarangKhusus';
 import AdminSkuVip from './AdminSkuVip';
+import AdminSkuVip10k from './AdminSkuVip10k';
+import AdminSkuVip20k from './AdminSkuVip20k';
 import AdminSkuVip50k from './AdminSkuVip50k';
 import AdminLabelSettings from './AdminLabelSettings';
 import AdminLabelPriority from './AdminLabelPriority';
@@ -31,7 +33,7 @@ interface AdminProps {
     onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[], skipPinMenus?: string[]) => void;
 }
 
-type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate';
+type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip10k' | 'skuVip20k' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate';
 
 const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -80,6 +82,8 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                 { id: 'formatting', label: 'Format Packing List', icon: FiSettings },
                 { id: 'labelSettings', label: 'Format Label', icon: FiLayout },
                 { id: 'barangKhusus', label: 'Data Barang Khusus', icon: FiDatabase },
+                { id: 'skuVip10k', label: 'SKU VIP (>10K)', icon: FiDatabase },
+                { id: 'skuVip20k', label: 'SKU VIP (>20K)', icon: FiDatabase },
                 { id: 'skuVip50k', label: 'SKU VIP (>50K)', icon: FiDatabase },
             ]
         },
@@ -362,6 +366,12 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                     </div>
                     <div className={activeView === 'skuVip' ? 'block' : 'hidden'}>
                         <AdminSkuVip showToast={showToast} />
+                    </div>
+                    <div className={activeView === 'skuVip10k' ? 'block' : 'hidden'}>
+                        <AdminSkuVip10k showToast={showToast} />
+                    </div>
+                    <div className={activeView === 'skuVip20k' ? 'block' : 'hidden'}>
+                        <AdminSkuVip20k showToast={showToast} />
                     </div>
                     <div className={activeView === 'skuVip50k' ? 'block' : 'hidden'}>
                         <AdminSkuVip50k showToast={showToast} />

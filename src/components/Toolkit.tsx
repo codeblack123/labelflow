@@ -10,6 +10,8 @@ import ToolkitLabelSplitterV3 from './ToolkitLabelSplitterV3';
 import ToolkitExtractPesanan from './ToolkitExtractPesanan';
 import ToolkitWmsCleaner from './ToolkitWmsCleaner';
 import ToolkitOrderanKilat from './ToolkitOrderanKilat';
+import ToolkitOrderanKilat10k from './ToolkitOrderanKilat10k';
+import ToolkitOrderanKilat20k from './ToolkitOrderanKilat20k';
 import ToolkitOrderanKilat50k from './ToolkitOrderanKilat50k';
 import ToolkitGineeProcessor from './ToolkitGineeProcessor';
 import ToolkitLabelSplitterV4 from './ToolkitLabelSplitterV4';
@@ -35,6 +37,8 @@ const TOOL_ITEMS = [
     { id: 'ginee-processor', title: 'Ginee Data Processor', desc: 'Extract ID Pesanan dari file Excel Ginee (pretelan vs satuan).', icon: FiTable, colorType: 'blue', type: 'default' },
     { id: 'verify', title: 'Verify Labels', badgeText: 'New', badgeType: 'pill', badgeColor: 'bg-teal-500', desc: 'Double check dan sinkronisasi antara PDF Asli, Custom, dan data Excel.', icon: FiCheckSquare, colorType: 'teal', type: 'default', isNew: true },
     { id: 'packing-list', title: 'Packing List Excel', badgeText: 'New', badgeType: 'pill', badgeColor: 'bg-green-500', desc: 'Upload file Excel (Packing List) untuk melihat daftar list secara rapi dan cepat.', icon: FiTable, colorType: 'teal', type: 'default', isNew: true },
+    { id: 'orderan-kilat-10k', title: 'Orderan Kilat', badgeText: '(VIP >10K)', badgeColor: 'text-amber-600', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan yang mengandung MSKU berharga tinggi (VIP >10K).', icon: FiFileText, colorType: 'amber', type: 'vip' },
+    { id: 'orderan-kilat-20k', title: 'Orderan Kilat', badgeText: '(VIP >20K)', badgeColor: 'text-purple-600', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan yang mengandung MSKU berharga tinggi (VIP >20K).', icon: FiFileText, colorType: 'purple', type: 'vip' },
     { id: 'orderan-kilat-50k', title: 'Orderan Kilat', badgeText: '(VIP >50K)', badgeColor: 'text-rose-600', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan yang mengandung MSKU berharga tinggi (VIP >50K).', icon: FiFileText, colorType: 'rose', type: 'vip' },
     { id: 'pdf-merger', title: 'Gabung Label Asli', badgeText: 'Baru', badgeType: 'pill', badgeColor: 'bg-blue-500', desc: 'Gabungkan 2 atau lebih file PDF resi asli menjadi satu file PDF utuh.', icon: FiLayers, colorType: 'blue', type: 'default', isNew: true }
 ];
@@ -47,6 +51,8 @@ const getColorClasses = (color) => {
         case 'rose': return { borderActive: 'bg-rose-50/70 border-rose-400 hover:border-rose-500 hover:bg-rose-50', iconBg: 'bg-rose-50 group-hover:bg-rose-100', iconText: 'text-rose-600' };
         case 'teal': return { borderActive: 'bg-teal-50/70 border-teal-400 hover:border-teal-500 hover:bg-teal-50', iconBg: 'bg-teal-50 group-hover:bg-teal-100', iconText: 'text-teal-600' };
         case 'orange': return { borderActive: 'border-orange-100 hover:border-orange-300', iconBg: 'bg-orange-50 group-hover:bg-orange-100', iconText: 'text-orange-600' };
+        case 'amber': return { borderActive: 'bg-amber-50/70 border-amber-400 hover:border-amber-500 hover:bg-amber-50', iconBg: 'bg-amber-50 group-hover:bg-amber-100', iconText: 'text-amber-600' };
+        case 'purple': return { borderActive: 'bg-purple-50/70 border-purple-400 hover:border-purple-500 hover:bg-purple-50', iconBg: 'bg-purple-50 group-hover:bg-purple-100', iconText: 'text-purple-600' };
         default: return { borderActive: 'border-gray-200', iconBg: 'bg-gray-100', iconText: 'text-gray-600' };
     }
 };
@@ -81,7 +87,7 @@ const Toolkit: React.FC<ToolkitProps> = ({ showToast, skipPin }) => {
     }, [skipPin]);
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
-    const [activeTool, setActiveTool] = useState<'awb-cleaner' | 'splitter' | 'label-splitter-v2' | 'label-splitter-v3' | 'label-splitter-v4' | 'label-splitter-v5' | 'extract-pesanan' | 'wms-cleaner' | 'ginee-processor' | 'verify' | 'pdf-merger' | 'packing-list' | 'orderan-kilat' | 'orderan-kilat-50k' | null>(null);
+    const [activeTool, setActiveTool] = useState<'awb-cleaner' | 'splitter' | 'label-splitter-v2' | 'label-splitter-v3' | 'label-splitter-v4' | 'label-splitter-v5' | 'extract-pesanan' | 'wms-cleaner' | 'ginee-processor' | 'verify' | 'pdf-merger' | 'packing-list' | 'orderan-kilat' | 'orderan-kilat-10k' | 'orderan-kilat-20k' | 'orderan-kilat-50k' | null>(null);
     const [lockedFeatures, setLockedFeatures] = useState<Set<string>>(new Set());
     const [devMode, setDevMode] = useState(false);
 
@@ -497,6 +503,10 @@ const Toolkit: React.FC<ToolkitProps> = ({ showToast, skipPin }) => {
                 <ToolkitWmsCleaner />
             ) : activeTool === 'orderan-kilat' ? (
                 <ToolkitOrderanKilat showToast={showToast} />
+            ) : activeTool === 'orderan-kilat-10k' ? (
+                <ToolkitOrderanKilat10k showToast={showToast} />
+            ) : activeTool === 'orderan-kilat-20k' ? (
+                <ToolkitOrderanKilat20k showToast={showToast} />
             ) : activeTool === 'orderan-kilat-50k' ? (
                 <ToolkitOrderanKilat50k showToast={showToast} />
             ) : activeTool === 'ginee-processor' ? (

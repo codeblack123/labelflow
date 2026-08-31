@@ -24,6 +24,8 @@ const ALL_FEATURES: { key: string; label: string; desc: string; color: string }[
     { key: 'extract-pesanan', label: 'Extract Pesanan', desc: 'Ambil nomor pesanan dari data Ginee', color: 'indigo' },
     { key: 'wms-cleaner', label: 'Pembersih ID Paket', desc: 'Hapus karakter @ dari No. Pesanan', color: 'orange' },
     { key: 'ginee-processor', label: 'Ginee Data Processor', desc: 'Extract ID Pesanan dari Excel Ginee', color: 'blue' },
+    { key: 'orderan-kilat-10k', label: 'Orderan Kilat (VIP >10K)', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan VIP >10K', color: 'amber' },
+    { key: 'orderan-kilat-20k', label: 'Orderan Kilat (VIP >20K)', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan VIP >20K', color: 'purple' },
     { key: 'orderan-kilat-50k', label: 'Orderan Kilat (VIP >50K)', desc: 'Filter file Excel Ginee, khusus menyisakan pesanan VIP >50K', color: 'rose' },
     { key: 'packing-list-upload-2', label: 'Sertakan Halaman Packing List (Barcode Akhir)', desc: 'Mengaktifkan pencetakan halaman barcode ekstra di belakang PDF (Berlaku Global)', color: 'teal' },
     { key: 'custom-label-priority-top', label: 'Prioritas Atas Custom Label', desc: 'Aktifkan fitur urutan atas untuk BOX/SLOP di dalam label resi', color: 'rose' },
@@ -37,7 +39,8 @@ const colorVariants: Record<string, { border: string; icon: string; bg: string }
     rose: { border: 'border-rose-200', icon: 'text-rose-600', bg: 'bg-rose-50' },
     orange: { border: 'border-orange-200', icon: 'text-orange-600', bg: 'bg-orange-50' },
     teal: { border: 'border-teal-200', icon: 'text-teal-600', bg: 'bg-teal-50' },
-
+    amber: { border: 'border-amber-200', icon: 'text-amber-600', bg: 'bg-amber-50' },
+    purple: { border: 'border-purple-200', icon: 'text-purple-600', bg: 'bg-purple-50' },
 };
 
 const AdminToolkitFeatures: React.FC<AdminToolkitFeaturesProps> = ({ showToast }) => {
