@@ -9066,11 +9066,11 @@ async def process_orderan_kilat_50k(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' tidak ditemukan")
             
         # Ambil data SKU VIP 50K dari Supabase
-        vip_data = await supabase_fetch("GET", "sku_vip_50k?select=sku")
+        vip_data = await supabase_fetch("GET", "sku_vip_50k?select=sku&limit=100000")
         vip_skus = {e['sku'] for e in vip_data} if vip_data else set()
         
         if not vip_skus:
-            raise HTTPException(status_code=404, detail="Data SKU VIP (>50K) masih kosong di database")
+            raise HTTPException(status_code=400, detail="Data SKU VIP (>50K) masih kosong di database")
             
         import numpy as np
         df_ffill = df.copy()
@@ -9085,7 +9085,7 @@ async def process_orderan_kilat_50k(file: UploadFile = File(...)):
                 vip_order_ids.add(order_id)
                 
         if not vip_order_ids:
-            raise HTTPException(status_code=404, detail="Tidak ditemukan resi dengan SKU VIP (>50K) di file ini")
+            raise HTTPException(status_code=400, detail="Tidak ditemukan resi dengan SKU VIP (>50K) di file ini")
             
         df_filtered = df_ffill[df_ffill[col_id_pesanan].isin(vip_order_ids)]
         
@@ -9155,7 +9155,7 @@ async def process_orderan_kilat_50k(file: UploadFile = File(...)):
 @app.get("/settings/sku-vip-10k")
 async def get_sku_vip_10k():
     try:
-        data = await supabase_fetch("GET", "sku_vip_10k?select=id,sku&order=created_at.desc")
+        data = await supabase_fetch("GET", "sku_vip_10k?select=id,sku&order=created_at.desc&limit=100000")
         return data if data else []
     except Exception as e:
         print(f"Error getting SKU VIP 10K: {e}")
@@ -9191,10 +9191,10 @@ async def bulk_delete_sku_vip_10k(request: Request):
         body = await request.json()
         ids = body.get("ids", [])
         if not ids:
-             raise HTTPException(status_code=400, detail="Tidak ada SKU yang dipilih")
+            raise HTTPException(status_code=400, detail="Tidak ada SKU yang dipilih")
              
         for sku in ids:
-             await supabase_fetch("DELETE", f"sku_vip_10k?sku=eq.{sku}")
+            await supabase_fetch("DELETE", f"sku_vip_10k?sku=eq.{sku}")
              
         return {"success": True}
     except Exception as e:
@@ -9207,10 +9207,10 @@ async def export_sku_vip_10k(request: Request):
         ids = body.get("ids", [])
         
         if not ids:
-            data = await supabase_fetch("GET", "sku_vip_10k?select=sku&order=created_at.desc")
+            data = await supabase_fetch("GET", "sku_vip_10k?select=sku&order=created_at.desc&limit=100000")
         else:
             in_clause = ",".join(f"%22{sku}%22" for sku in ids)
-            data = await supabase_fetch("GET", f"sku_vip_10k?sku=in.({in_clause})&select=sku")
+            data = await supabase_fetch("GET", f"sku_vip_10k?sku=in.({in_clause})&select=sku&limit=100000")
             
         df = pd.DataFrame(data if data else [])
         if df.empty:
@@ -9247,7 +9247,7 @@ async def import_sku_vip_10k(file: UploadFile = File(...)):
                 skus.add(sku)
                 
         if not skus:
-             return {"success": True, "count": 0}
+            return {"success": True, "count": 0}
              
         to_import = [{"sku": s} for s in skus]
         
@@ -9279,11 +9279,11 @@ async def process_orderan_kilat_10k(file: UploadFile = File(...)):
         if not col_id_pesanan or not col_msku:
             raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' tidak ditemukan")
             
-        vip_data = await supabase_fetch("GET", "sku_vip_10k?select=sku")
+        vip_data = await supabase_fetch("GET", "sku_vip_10k?select=sku&limit=100000")
         vip_skus = {e['sku'] for e in vip_data} if vip_data else set()
         
         if not vip_skus:
-            raise HTTPException(status_code=404, detail="Data SKU VIP (>10K) masih kosong di database")
+            raise HTTPException(status_code=400, detail="Data SKU VIP (>10K) masih kosong di database")
             
         import numpy as np
         df_ffill = df.copy()
@@ -9298,7 +9298,7 @@ async def process_orderan_kilat_10k(file: UploadFile = File(...)):
                 vip_order_ids.add(order_id)
                 
         if not vip_order_ids:
-            raise HTTPException(status_code=404, detail="Tidak ditemukan resi dengan SKU VIP (>10K) di file ini")
+            raise HTTPException(status_code=400, detail="Tidak ditemukan resi dengan SKU VIP (>10K) di file ini")
             
         df_filtered = df_ffill[df_ffill[col_id_pesanan].isin(vip_order_ids)]
         
@@ -9368,7 +9368,7 @@ async def process_orderan_kilat_10k(file: UploadFile = File(...)):
 @app.get("/settings/sku-vip-20k")
 async def get_sku_vip_20k():
     try:
-        data = await supabase_fetch("GET", "sku_vip_20k?select=id,sku&order=created_at.desc")
+        data = await supabase_fetch("GET", "sku_vip_20k?select=id,sku&order=created_at.desc&limit=100000")
         return data if data else []
     except Exception as e:
         print(f"Error getting SKU VIP 20K: {e}")
@@ -9404,10 +9404,10 @@ async def bulk_delete_sku_vip_20k(request: Request):
         body = await request.json()
         ids = body.get("ids", [])
         if not ids:
-             raise HTTPException(status_code=400, detail="Tidak ada SKU yang dipilih")
+            raise HTTPException(status_code=400, detail="Tidak ada SKU yang dipilih")
              
         for sku in ids:
-             await supabase_fetch("DELETE", f"sku_vip_20k?sku=eq.{sku}")
+            await supabase_fetch("DELETE", f"sku_vip_20k?sku=eq.{sku}")
              
         return {"success": True}
     except Exception as e:
@@ -9420,10 +9420,10 @@ async def export_sku_vip_20k(request: Request):
         ids = body.get("ids", [])
         
         if not ids:
-            data = await supabase_fetch("GET", "sku_vip_20k?select=sku&order=created_at.desc")
+            data = await supabase_fetch("GET", "sku_vip_20k?select=sku&order=created_at.desc&limit=100000")
         else:
             in_clause = ",".join(f"%22{sku}%22" for sku in ids)
-            data = await supabase_fetch("GET", f"sku_vip_20k?sku=in.({in_clause})&select=sku")
+            data = await supabase_fetch("GET", f"sku_vip_20k?sku=in.({in_clause})&select=sku&limit=100000")
             
         df = pd.DataFrame(data if data else [])
         if df.empty:
@@ -9460,7 +9460,7 @@ async def import_sku_vip_20k(file: UploadFile = File(...)):
                 skus.add(sku)
                 
         if not skus:
-             return {"success": True, "count": 0}
+            return {"success": True, "count": 0}
              
         to_import = [{"sku": s} for s in skus]
         
@@ -9492,11 +9492,11 @@ async def process_orderan_kilat_20k(file: UploadFile = File(...)):
         if not col_id_pesanan or not col_msku:
             raise HTTPException(status_code=400, detail="Kolom 'ID Pesanan' atau 'MSKU' tidak ditemukan")
             
-        vip_data = await supabase_fetch("GET", "sku_vip_20k?select=sku")
+        vip_data = await supabase_fetch("GET", "sku_vip_20k?select=sku&limit=100000")
         vip_skus = {e['sku'] for e in vip_data} if vip_data else set()
         
         if not vip_skus:
-            raise HTTPException(status_code=404, detail="Data SKU VIP (>20K) masih kosong di database")
+            raise HTTPException(status_code=400, detail="Data SKU VIP (>20K) masih kosong di database")
             
         import numpy as np
         df_ffill = df.copy()
@@ -9511,7 +9511,7 @@ async def process_orderan_kilat_20k(file: UploadFile = File(...)):
                 vip_order_ids.add(order_id)
                 
         if not vip_order_ids:
-            raise HTTPException(status_code=404, detail="Tidak ditemukan resi dengan SKU VIP (>20K) di file ini")
+            raise HTTPException(status_code=400, detail="Tidak ditemukan resi dengan SKU VIP (>20K) di file ini")
             
         df_filtered = df_ffill[df_ffill[col_id_pesanan].isin(vip_order_ids)]
         
