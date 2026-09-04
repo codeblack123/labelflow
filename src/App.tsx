@@ -954,9 +954,22 @@ const App: React.FC = () => {
 
         return () => { supabase.removeChannel(channel); };
     }, [user, viewState]);
-    // --- TOOLKIT FEATURES (GLOBAL CONFIG) ---
+    // --- TOOLKIT FEATURES (GLOBAL & PER-WAREHOUSE CONFIG) ---
     useEffect(() => {
         if (viewState !== 'app') return;
+
+        const updatePackingListStatus = (feature: any, currentGudangId: string | null) => {
+            if (!feature) return;
+            const enabledGudangs = feature.enabled_gudang_ids;
+            if (enabledGudangs && Array.isArray(enabledGudangs) && enabledGudangs.length > 0) {
+                const isEnabled = currentGudangId 
+                    ? enabledGudangs.some((gid: string) => String(gid).toLowerCase() === String(currentGudangId).toLowerCase())
+                    : !feature.is_locked;
+                setIncludeSummary(isEnabled);
+            } else {
+                setIncludeSummary(!feature.is_locked);
+            }
+        };
 
         const fetchToolkitFeatures = async () => {
             try {
@@ -964,7 +977,7 @@ const App: React.FC = () => {
                 if (data) {
                     const packingListFeature = data.find((f: any) => f.feature_key === 'packing-list-upload-2');
                     if (packingListFeature) {
-                        setIncludeSummary(!packingListFeature.is_locked);
+                        updatePackingListStatus(packingListFeature, activeWarehouseId);
                     }
                     const timerFeature = data.find((f: any) => f.feature_key === 'productivity-timer');
                     if (timerFeature) {
@@ -978,9 +991,8 @@ const App: React.FC = () => {
         const channel = supabase.channel('public:toolkit_feature_locks')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'toolkit_feature_locks' }, (payload) => {
                 if (payload.new && (payload.new as any).feature_key === 'packing-list-upload-2') {
-                    setIncludeSummary(!(payload.new as any).is_locked);
-                    // Trigger a toast so the active user knows it updated
-                    const event = new CustomEvent('app_toast', { detail: (payload.new as any).is_locked ? '⚠️ Halaman Packing List (Barcode Akhir) dimatikan oleh Admin.' : '✓ Halaman Packing List (Barcode Akhir) diaktifkan oleh Admin.' });
+                    updatePackingListStatus(payload.new, activeWarehouseId);
+                    const event = new CustomEvent('app_toast', { detail: '✓ Pengaturan Halaman Packing List diperbarui oleh Admin.' });
                     window.dispatchEvent(event);
                 }
                 if (payload.new && (payload.new as any).feature_key === 'productivity-timer') {
@@ -992,7 +1004,7 @@ const App: React.FC = () => {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [viewState]);
+    }, [viewState, activeWarehouseId]);
     // -----------------------
     const [isUndoing, setIsUndoing] = useState(false);
 

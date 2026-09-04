@@ -2866,37 +2866,138 @@ async def update_toolkit_order(item: ToolkitOrderUpdate):
 @app.get("/settings/toolkit-features")
 async def get_toolkit_features():
     cache_file = "toolkit_features_cache.json"
-    try:
-        data = await supabase_fetch("GET", "toolkit_feature_locks?select=feature_key,is_locked")
-        try:
-            with open(cache_file, 'w', encoding='utf-8') as f: json.dump(data, f)
-        except: pass
-        return data
-    except Exception as e:
-        print(f"Toolkit Features Get Error: {e}")
-    # Fallback to local cache
+    cached_map = {}
     if os.path.exists(cache_file):
         try:
-            with open(cache_file, 'r', encoding='utf-8') as f: return json.load(f)
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                c_data = json.load(f)
+                if isinstance(c_data, list):
+                    for item in c_data:
+                        cached_map[item.get('feature_key')] = item
         except: pass
+
+    try:
+        data = await supabase_fetch("GET", "toolkit_feature_locks?select=feature_key,is_locked,enabled_gudang_ids")
+        if isinstance(data, list):
+            try:
+                with open(cache_file, 'w', encoding='utf-8') as f: json.dump(data, f)
+            except: pass
+            return data
+    except Exception as e:
+        try:
+            data = await supabase_fetch("GET", "toolkit_feature_locks?select=feature_key,is_locked")
+            if isinstance(data, list):
+                merged = []
+                for item in data:
+                    f_key = item.get('feature_key')
+                    merged_item = dict(item)
+                    if f_key in cached_map and 'enabled_gudang_ids' in cached_map[f_key]:
+                        merged_item['enabled_gudang_ids'] = cached_map[f_key]['enabled_gudang_ids']
+                    merged.append(merged_item)
+                try:
+                    with open(cache_file, 'w', encoding='utf-8') as f: json.dump(merged, f)
+                except: pass
+                return merged
+        except Exception:
+            pass
+
+    # Fallback to local cache
+    if cached_map:
+        return list(cached_map.values())
     return []
 
 class ToolkitFeatureItem(BaseModel):
     feature_key: str
     is_locked: bool
+    enabled_gudang_ids: Optional[list[str]] = None
 
 @app.post("/settings/toolkit-features")
 async def upsert_toolkit_feature(item: ToolkitFeatureItem):
+    cache_file = "toolkit_features_cache.json"
     try:
         existing = await supabase_fetch("GET", f"toolkit_feature_locks?feature_key=eq.{urllib.parse.quote(item.feature_key)}")
+        update_dict = {"is_locked": item.is_locked}
+        if item.enabled_gudang_ids is not None:
+            update_dict["enabled_gudang_ids"] = item.enabled_gudang_ids
+
         if existing:
-            await supabase_fetch("PATCH", f"toolkit_feature_locks?feature_key=eq.{urllib.parse.quote(item.feature_key)}", data={"is_locked": item.is_locked})
+            try:
+                await supabase_fetch("PATCH", f"toolkit_feature_locks?feature_key=eq.{urllib.parse.quote(item.feature_key)}", data=update_dict)
+            except Exception as e_patch:
+                if "enabled_gudang_ids" in update_dict:
+                    await supabase_fetch("PATCH", f"toolkit_feature_locks?feature_key=eq.{urllib.parse.quote(item.feature_key)}", data={"is_locked": item.is_locked})
+                else:
+                    raise e_patch
         else:
-            await supabase_fetch("POST", "toolkit_feature_locks", data={"feature_key": item.feature_key, "is_locked": item.is_locked})
+            post_dict = {"feature_key": item.feature_key, "is_locked": item.is_locked}
+            if item.enabled_gudang_ids is not None:
+                post_dict["enabled_gudang_ids"] = item.enabled_gudang_ids
+            try:
+                await supabase_fetch("POST", "toolkit_feature_locks", data=post_dict)
+            except Exception as e_post:
+                if "enabled_gudang_ids" in post_dict:
+                    await supabase_fetch("POST", "toolkit_feature_locks", data={"feature_key": item.feature_key, "is_locked": item.is_locked})
+                else:
+                    raise e_post
+
+        # Update local cache
+        try:
+            cached_data = []
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    c_load = json.load(f)
+                    if isinstance(c_load, list):
+                        cached_data = c_load
+            found = False
+            for c_item in cached_data:
+                if c_item.get('feature_key') == item.feature_key:
+                    c_item['is_locked'] = item.is_locked
+                    if item.enabled_gudang_ids is not None:
+                        c_item['enabled_gudang_ids'] = item.enabled_gudang_ids
+                    found = True
+                    break
+            if not found:
+                new_entry = {"feature_key": item.feature_key, "is_locked": item.is_locked}
+                if item.enabled_gudang_ids is not None:
+                    new_entry["enabled_gudang_ids"] = item.enabled_gudang_ids
+                cached_data.append(new_entry)
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cached_data, f)
+        except Exception as e_cache:
+            print(f"[CACHE] Error updating local cache: {e_cache}")
+
         return {"success": True}
     except Exception as e:
         print(f"Toolkit Feature Upsert Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+async def is_feature_active_for_gudang(feature_key: str, gudang_id: Optional[str] = None) -> bool:
+    features = await get_toolkit_features()
+    if not isinstance(features, list):
+        return True
+
+    target_feature = None
+    for f in features:
+        if f.get("feature_key") == feature_key:
+            target_feature = f
+            break
+
+    if not target_feature:
+        return True
+
+    is_locked = target_feature.get("is_locked", False)
+    enabled_gudang_ids = target_feature.get("enabled_gudang_ids")
+
+    # If enabled_gudang_ids is specified and is a non-empty list:
+    if enabled_gudang_ids is not None and isinstance(enabled_gudang_ids, list) and len(enabled_gudang_ids) > 0:
+        if not gudang_id:
+            return not is_locked
+        gudang_str = str(gudang_id).strip().lower()
+        return any(str(gid).strip().lower() == gudang_str for gid in enabled_gudang_ids)
+
+    return not is_locked
+
+
 
 @app.put("/settings/formatting/columns/{id}")
 async def update_column_setting(id: UUID, item: ColumnSettingUpdate):
@@ -6662,16 +6763,10 @@ async def process_labels(
         # APPEND SUMMARY PAGE for Upload 2
         if sort_by_sku_count:
             try:
-                # Cek apakah fitur packing list dimatikan di admin
-                features = await supabase_fetch("GET", "toolkit_feature_locks?select=feature_key,is_locked")
-                is_packing_list_locked = False
-                if isinstance(features, list):
-                    for f in features:
-                        if f.get("feature_key") == "packing-list-upload-2":
-                            is_packing_list_locked = f.get("is_locked", False)
-                            break
+                # Cek apakah fitur packing list aktif untuk gudang ini
+                is_packing_list_active = await is_feature_active_for_gudang("packing-list-upload-2", gudang_id)
                 
-                if not is_packing_list_locked:
+                if is_packing_list_active:
                     final_ids = []
                     seen_ids = set()
                     for page_info in all_pages:
@@ -7976,16 +8071,10 @@ async def process_labels_with_stats(
         # APPEND SUMMARY PAGE for Upload 2
         if sort_by_sku_count:
             try:
-                # Cek apakah fitur packing list dimatikan di admin
-                features = await supabase_fetch("GET", "toolkit_feature_locks?select=feature_key,is_locked")
-                is_packing_list_locked = False
-                if isinstance(features, list):
-                    for f in features:
-                        if f.get("feature_key") == "packing-list-upload-2":
-                            is_packing_list_locked = f.get("is_locked", False)
-                            break
+                # Cek apakah fitur packing list aktif untuk gudang ini
+                is_packing_list_active = await is_feature_active_for_gudang("packing-list-upload-2", gudang_id)
                 
-                if not is_packing_list_locked:
+                if is_packing_list_active:
                     final_ids = []
                     seen_ids = set()
                     for page_info in all_pages:
