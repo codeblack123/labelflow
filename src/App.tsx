@@ -661,6 +661,19 @@ const App: React.FC = () => {
                     .maybeSingle();
                 
                 if (data && !error) {
+                    // Check if update targets specific warehouses
+                    if (data.target_type === 'specific' && Array.isArray(data.target_gudang_ids) && data.target_gudang_ids.length > 0) {
+                        const isTargetedGudang = activeWarehouseId 
+                            ? data.target_gudang_ids.some((gid: string) => String(gid).toLowerCase() === String(activeWarehouseId).toLowerCase())
+                            : false;
+                        
+                        if (!isTargetedGudang) {
+                            // User is on a warehouse that is not targeted by this update
+                            setShowUpdateModal(false);
+                            return;
+                        }
+                    }
+
                     let isLocalAlreadyUpdated = false;
                     let localInfo: any = null;
 
@@ -742,7 +755,7 @@ const App: React.FC = () => {
         // Check periodically (every 3 seconds when update modal is active to auto-close on update, else 10s)
         const intervalId = setInterval(checkSystemUpdate, showUpdateModal ? 3000 : 10000);
         return () => clearInterval(intervalId);
-    }, [showUpdateModal]);
+    }, [showUpdateModal, activeWarehouseId]);
 
 
     const [processStats2, setProcessStats2] = useState<ProcessStats | null>(null);
