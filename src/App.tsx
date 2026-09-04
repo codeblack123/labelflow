@@ -663,9 +663,15 @@ const App: React.FC = () => {
                 if (data && !error) {
                     // Check if update targets specific warehouses
                     if (data.target_type === 'specific' && Array.isArray(data.target_gudang_ids) && data.target_gudang_ids.length > 0) {
-                        const isTargetedGudang = activeWarehouseId 
-                            ? data.target_gudang_ids.some((gid: string) => String(gid).toLowerCase() === String(activeWarehouseId).toLowerCase())
-                            : false;
+                        const activeGudang = activeWarehouseId || localStorage.getItem('active_gudang_id');
+                        const userAssigned = (user && user.assigned_warehouses && Array.isArray(user.assigned_warehouses))
+                            ? user.assigned_warehouses
+                            : [];
+
+                        const isTargetedGudang = Boolean(
+                            (activeGudang && data.target_gudang_ids.some((gid: string) => String(gid).toLowerCase() === String(activeGudang).toLowerCase())) ||
+                            (userAssigned.length > 0 && data.target_gudang_ids.some((gid: string) => userAssigned.some((uw: string) => String(uw).toLowerCase() === String(gid).toLowerCase())))
+                        );
                         
                         if (!isTargetedGudang) {
                             // User is on a warehouse that is not targeted by this update
@@ -734,8 +740,18 @@ const App: React.FC = () => {
                             setShowUpdateModal(false);
                         }
                     } else {
-                        const ackVersion = localStorage.getItem('acknowledged_version');
-                        if (ackVersion !== data.version_code) {
+                        // Local backend is NOT updated yet (offline or older version)
+                        const ackTime = localStorage.getItem('acknowledged_update_time');
+                        const updateTime = data.updated_at || data.created_at || '';
+                        
+                        // If user manually dismissed this EXACT publish timestamp, don't show; otherwise show!
+                        const isDismissed = Boolean(
+                            ackTime && 
+                            updateTime && 
+                            new Date(ackTime).getTime() >= new Date(updateTime).getTime()
+                        );
+
+                        if (!isDismissed) {
                             setSystemUpdate(data);
                             setShowUpdateModal(true);
                         } else {
@@ -754,8 +770,19 @@ const App: React.FC = () => {
         
         // Check periodically (every 3 seconds when update modal is active to auto-close on update, else 10s)
         const intervalId = setInterval(checkSystemUpdate, showUpdateModal ? 3000 : 10000);
-        return () => clearInterval(intervalId);
-    }, [showUpdateModal, activeWarehouseId]);
+
+        // Realtime listener so all clients receive popup update instantly
+        const channel = supabase.channel('app-system-updates-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_updates' }, () => {
+                checkSystemUpdate();
+            })
+            .subscribe();
+
+        return () => {
+            clearInterval(intervalId);
+            supabase.removeChannel(channel);
+        };
+    }, [showUpdateModal, activeWarehouseId, user]);
 
 
     const [processStats2, setProcessStats2] = useState<ProcessStats | null>(null);
@@ -3932,6 +3959,11 @@ const App: React.FC = () => {
                                 })()}
                                 <button
                                     onClick={() => {
+                                        if (systemUpdate?.updated_at) {
+                                            localStorage.setItem('acknowledged_update_time', systemUpdate.updated_at);
+                                        } else {
+                                            localStorage.setItem('acknowledged_update_time', new Date().toISOString());
+                                        }
                                         localStorage.setItem('acknowledged_version', systemUpdate.version_code);
                                         setShowUpdateModal(false);
                                     }}

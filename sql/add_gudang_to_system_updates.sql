@@ -1,21 +1,25 @@
 -- ============================================================
 -- Add target_type and target_gudang_ids to system_updates
--- Run this in your Supabase SQL Editor if you manage the DB directly
+-- Jalankan query ini di Supabase SQL Editor
 -- ============================================================
 
+ALTER TABLE IF EXISTS system_updates 
+ADD COLUMN IF NOT EXISTS target_type TEXT DEFAULT 'all';
+
+ALTER TABLE IF EXISTS system_updates 
+ADD COLUMN IF NOT EXISTS target_gudang_ids TEXT[] DEFAULT NULL;
+
+-- Opsional: Aktifkan Realtime agar notifikasi pop-up langsung muncul tanpa perlu refresh
 DO $$ 
 BEGIN 
     IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'system_updates' AND column_name = 'target_type'
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'system_updates'
     ) THEN
-        ALTER TABLE system_updates ADD COLUMN target_type TEXT DEFAULT 'all';
+        ALTER PUBLICATION supabase_realtime ADD TABLE system_updates;
     END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'system_updates' AND column_name = 'target_gudang_ids'
-    ) THEN
-        ALTER TABLE system_updates ADD COLUMN target_gudang_ids UUID[] DEFAULT NULL;
-    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
 END $$;
+

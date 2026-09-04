@@ -136,12 +136,18 @@ export const SystemUpdateAdmin: React.FC = () => {
     };
 
     const handleSave = async (activeStatus: boolean) => {
+        if (activeStatus && targetType === 'specific' && targetGudangIds.length === 0) {
+            setMsg({ type: 'error', text: 'Silakan pilih minimal 1 gudang jika memilih target "Gudang Tertentu".' });
+            return;
+        }
+
         setLoading(true);
         setMsg(null);
         try {
             // Check if row exists
-            const { data: existing } = await supabase.from('system_updates').select('id').limit(1).single();
+            const { data: existing } = await supabase.from('system_updates').select('id').limit(1).maybeSingle();
             
+            const currentTimestamp = new Date().toISOString();
             const payload: any = {
                 version_code: versionCode,
                 title,
@@ -150,7 +156,7 @@ export const SystemUpdateAdmin: React.FC = () => {
                 is_active: activeStatus,
                 target_type: targetType,
                 target_gudang_ids: targetType === 'specific' ? targetGudangIds : null,
-                updated_at: new Date().toISOString()
+                updated_at: currentTimestamp
             };
 
             let saveError = null;
@@ -171,13 +177,20 @@ export const SystemUpdateAdmin: React.FC = () => {
                     instructions,
                     download_link: `${downloadLink}|||${downloadLinkBat}`,
                     is_active: activeStatus,
-                    updated_at: new Date().toISOString()
+                    updated_at: currentTimestamp
                 };
                 if (existing) {
                     await supabase.from('system_updates').update(fallbackPayload).eq('id', existing.id);
                 } else {
                     await supabase.from('system_updates').insert([fallbackPayload]);
                 }
+
+                setIsActive(activeStatus);
+                setMsg({ 
+                    type: 'error', 
+                    text: '⚠️ Peringatan: Kolom target gudang belum aktif di Supabase! Harap jalankan script sql/add_gudang_to_system_updates.sql di Supabase SQL Editor agar filter gudang tersimpan.' 
+                });
+                return;
             }
             
             setIsActive(activeStatus);
