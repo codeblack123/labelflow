@@ -317,8 +317,22 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) 
             setUploadProgress(100);
             await new Promise(r => setTimeout(r, 600));
 
-            setImportStatus({ type: 'success', message: `Berhasil import ${res.data.count} data baru!` });
-            if (showToast) showToast(`✓ Import Sukses: ${res.data.count} data`);
+            const { count, total_rows, duplicates, empty, failed } = res.data;
+            let successMsg = `Berhasil import ${count} data SKU!`;
+            if (total_rows) {
+                const notes = [];
+                if (duplicates) notes.push(`${duplicates} duplikat SKU diabaikan`);
+                if (empty) notes.push(`${empty} baris kosong`);
+                if (failed) notes.push(`${failed} gagal disimpan`);
+                if (notes.length > 0) {
+                    successMsg = `Berhasil import ${count} dari ${total_rows} baris (${notes.join(', ')})`;
+                } else {
+                    successMsg = `Berhasil import semua ${count} data SKU!`;
+                }
+            }
+
+            setImportStatus({ type: 'success', message: successMsg });
+            if (showToast) showToast(`✓ Import Sukses: ${count} SKU tersimpan`);
             setImportFile(null);
             fetchMappings();
         } catch (e: any) {

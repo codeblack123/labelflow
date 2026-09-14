@@ -416,27 +416,17 @@ async def get_sku_mappings_paginated(
 
 @app.post("/settings/sku-mappings")
 async def add_sku_mapping(item: SkuMappingItem):
-    # Optimization: Check specific ID and SKU instead of fetching all 10k+ rows
     try:
         if not item.gudang_id:
             raise HTTPException(status_code=400, detail="gudang_id wajib disertakan")
         
-        # 1. Check if ID exists IN THE SAME WAREHOUSE
-        check_id = await supabase_fetch("GET", f"sku_mappings?custom_id=eq.{urllib.parse.quote(item.id)}&gudang_id=eq.{item.gudang_id}")
-        if check_id and isinstance(check_id, list) and len(check_id) > 0:
-            existing = check_id[0]
-            if existing['sku'] == item.sku:
-                 raise HTTPException(status_code=400, detail=f"Data ID '{item.id}' dengan SKU ini sudah ada")
-            else:
-                 raise HTTPException(status_code=400, detail=f"Konflik: ID '{item.id}' sudah digunakan oleh SKU '{existing['sku']}'")
-        
-        # 2. Check if SKU exists IN THE SAME WAREHOUSE
+        # 1. Check if SKU already exists IN THE SAME WAREHOUSE
         check_sku = await supabase_fetch("GET", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}&gudang_id=eq.{item.gudang_id}")
         if check_sku and isinstance(check_sku, list) and len(check_sku) > 0:
              existing = check_sku[0]
-             raise HTTPException(status_code=400, detail=f"Konflik: SKU '{item.sku}' sudah digunakan oleh ID '{existing['custom_id']}'")
+             raise HTTPException(status_code=400, detail=f"Konflik: SKU '{item.sku}' sudah terdaftar dengan ID '{existing['custom_id']}' di gudang ini.")
 
-        # 3. Insert new data
+        # 2. Insert new data (custom_id boleh sama dengan SKU lain karena 1 rak bisa banyak barang)
         await supabase_fetch("POST", "sku_mappings", data={
             "custom_id": item.id, 
             "sku": item.sku, 
@@ -457,22 +447,11 @@ async def update_sku_mapping(id: str, item: SkuMappingItem):
     try:
         decoded_id = urllib.parse.unquote(id)
         
-        # 1. Check if SKU exists and belongs to a DIFFERENT ID
+        # Update record matching old custom_id and SKU or gudang_id
         gid_filter = f"&gudang_id=eq.{item.gudang_id}" if item.gudang_id else ""
-        check_sku = await supabase_fetch("GET", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}{gid_filter}")
-        if check_sku and isinstance(check_sku, list) and len(check_sku) > 0:
-            for existing in check_sku:
-                if existing['custom_id'] != decoded_id:
-                     raise HTTPException(status_code=400, detail=f"Konflik: SKU '{item.sku}' sudah digunakan oleh ID '{existing['custom_id']}'")
-                     
-        # 2. Check if the NEW custom_id already exists (if it's being changed)
-        if decoded_id != item.id:
-            check_id = await supabase_fetch("GET", f"sku_mappings?custom_id=eq.{urllib.parse.quote(item.id)}")
-            if check_id and isinstance(check_id, list) and len(check_id) > 0:
-                 raise HTTPException(status_code=400, detail=f"Konflik: ID Custom '{item.id}' sudah ada di database.")
-
-        # 3. Update data
-        await supabase_fetch("PATCH", f"sku_mappings?custom_id=eq.{urllib.parse.quote(decoded_id)}", data={
+        
+        # 1. Update data
+        await supabase_fetch("PATCH", f"sku_mappings?sku=eq.{urllib.parse.quote(item.sku)}{gid_filter}", data={
             "custom_id": item.id,
             "sku": item.sku,
             "rak": item.rak if item.rak else "",
@@ -1865,9 +1844,10 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
         except Exception as e:
             print(f"[IMPORT] Warning: Clear failed but continuing insertion: {e}")
             
-        # 3. Batch Upsert (tidak gagal jika ada konflik unique key)
+        # 3. Batch Upsert (menggunakan conflict key sku,gudang_id karena 1 rak/custom_id bisa untuk banyak SKU)
+        failed_count = 0
         if to_import:
-            chunk_size = 100
+            chunk_size = 500
             total_batches = (len(to_import) + chunk_size - 1) // chunk_size
             inserted = 0
             for i in range(0, len(to_import), chunk_size):
@@ -1875,7 +1855,7 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
                 batch_num = i // chunk_size + 1
                 try:
                     await supabase_fetch(
-                        "POST", "sku_mappings?on_conflict=custom_id,gudang_id",
+                        "POST", "sku_mappings?on_conflict=sku,gudang_id",
                         data=chunk,
                         headers={
                             "Prefer": "resolution=merge-duplicates,return=minimal"
@@ -1885,10 +1865,18 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
                     print(f"[IMPORT] Batch {batch_num}/{total_batches} OK ({inserted}/{len(to_import)})")
                 except Exception as batch_e:
                     print(f"[IMPORT] Batch {batch_num} FAILED: {batch_e}")
-                    if inserted == 0 and len(to_import) > 0:
+                    failed_count += len(chunk)
+                    if inserted == 0 and batch_num == total_batches:
                         raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {str(batch_e)}")
                 
-        return {"success": True, "count": inserted}
+        return {
+            "success": True, 
+            "count": inserted,
+            "total_rows": len(df),
+            "duplicates": duplicate_count,
+            "empty": empty_count,
+            "failed": failed_count
+        }
         
     except HTTPException as he:
         raise he
