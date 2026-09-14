@@ -1797,34 +1797,43 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
         empty_count = 0
         
         for index, row in df.iterrows():
-            raw_id = str(row[id_col]).strip()
-            raw_sku = str(row[sku_col]).strip()
+            raw_id = str(row[id_col]).strip() if id_col in row else ""
+            raw_sku = str(row[sku_col]).strip() if sku_col in row else ""
             raw_rak = str(row[rak_col]).strip() if rak_col and rak_col in row else ""
             raw_lorong = str(row[lorong_col]).strip() if lorong_col and lorong_col in row else ""
             
-            # Skip baris kosong
-            if not raw_id or raw_id in ('-', 'nan', 'None') or \
-               not raw_sku or raw_sku in ('-', 'nan', 'None'):
+            # Clean string representations of empty/nan
+            if raw_sku in ('-', 'nan', 'None', 'NaN', 'null', '<NA>'):
+                raw_sku = ""
+            if raw_id in ('-', 'nan', 'None', 'NaN', 'null', '<NA>'):
+                raw_id = ""
+            if raw_rak in ('-', 'nan', 'None', 'NaN', 'null', '<NA>'):
+                raw_rak = ""
+            if raw_lorong in ('-', 'nan', 'None', 'NaN', 'null', '<NA>'):
+                raw_lorong = ""
+                
+            # Skip jika SKU kosong
+            if not raw_sku:
                 empty_count += 1
                 continue
             
-            # De-duplikasi berdasarkan SKU (setiap SKU hanya boleh ada 1 kali)
+            # De-duplikasi berdasarkan SKU (setiap SKU hanya boleh ada 1 kali per import)
             if raw_sku in seen_skus:
                 duplicate_count += 1
                 continue
             
             # Gabungkan Lorong + RAK + ID → custom_id
-            # Contoh: LORONG="12", RAK="EK", ID="06-22" → custom_id="12-EK-06-22"
-            # custom_id TIDAK perlu unik — beberapa SKU bisa di lokasi yang sama
             parts = []
-            if raw_lorong and raw_lorong not in ('-', 'nan', 'None'):
+            if raw_lorong:
                 parts.append(raw_lorong)
-            if raw_rak and raw_rak not in ('-', 'nan', 'None'):
+            if raw_rak:
                 parts.append(raw_rak)
             if raw_id:
                 parts.append(raw_id)
+            elif not parts:
+                parts.append(raw_sku)
                 
-            final_id = "-".join(parts) if parts else ""
+            final_id = "-".join(parts) if parts else raw_sku
                  
             to_import.append({
                 "custom_id": final_id, 
@@ -1844,12 +1853,12 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
         except Exception as e:
             print(f"[IMPORT] Warning: Clear failed but continuing insertion: {e}")
             
-        # 3. Batch Upsert (menggunakan conflict key sku,gudang_id karena 1 rak/custom_id bisa untuk banyak SKU)
+        # 3. Batch Upsert dengan fallback per-item jika ada batch gagal
         failed_count = 0
+        inserted = 0
         if to_import:
-            chunk_size = 500
+            chunk_size = 200
             total_batches = (len(to_import) + chunk_size - 1) // chunk_size
-            inserted = 0
             for i in range(0, len(to_import), chunk_size):
                 chunk = to_import[i:i + chunk_size]
                 batch_num = i // chunk_size + 1
@@ -1864,10 +1873,18 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
                     inserted += len(chunk)
                     print(f"[IMPORT] Batch {batch_num}/{total_batches} OK ({inserted}/{len(to_import)})")
                 except Exception as batch_e:
-                    print(f"[IMPORT] Batch {batch_num} FAILED: {batch_e}")
-                    failed_count += len(chunk)
-                    if inserted == 0 and batch_num == total_batches:
-                        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {str(batch_e)}")
+                    print(f"[IMPORT] Batch {batch_num} failed ({batch_e}), retrying row-by-row...")
+                    for item in chunk:
+                        try:
+                            await supabase_fetch(
+                                "POST", "sku_mappings?on_conflict=sku,gudang_id",
+                                data=[item],
+                                headers={"Prefer": "resolution=merge-duplicates,return=minimal"}
+                            )
+                            inserted += 1
+                        except Exception as item_e:
+                            print(f"[IMPORT] Failed SKU '{item.get('sku')}': {item_e}")
+                            failed_count += 1
                 
         return {
             "success": True, 
