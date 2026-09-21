@@ -69,6 +69,31 @@ def get_main_file_info():
 
 app = FastAPI()
 
+# Enable CORS for all origins (including web production https://www.labelflow.my.id)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def add_private_network_headers(request: Request, call_next):
+    if request.method == "OPTIONS" and request.headers.get("access-control-request-private-network") == "true":
+        response = JSONResponse(content={"status": "ok"})
+        response.headers["Access-Control-Allow-Origin"] = request.headers.get("origin", "*")
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+    
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network") == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
 @app.get("/")
 async def root():
     finfo = get_main_file_info()
@@ -202,12 +227,6 @@ async def clean_duplicate_orders(request: Request):
         print(f"[CLEAN DUPLICATES] Error: {e}")
         return {"status": "error", "detail": str(e)}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # --- SKU MAPPING STORAGE (SUPABASE DIRECT) ---
 import httpx

@@ -151,28 +151,53 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
             let orderCount = 0;
             let countError = null;
-            let recents = [];
+            let recents: any[] = [];
             let listError = null;
 
             if (validFilenames.length > 0) {
-                const countQuery = await supabase
-                    .from('processed_items')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('date_processed', dateToUse)
-                    .in('excel_filename', validFilenames);
-                
-                orderCount = countQuery.count || 0;
-                countError = countQuery.error;
+                // Chunk filenames to avoid HTTP 400 URI Too Long / Bad Request in Supabase
+                const CHUNK_SIZE = 25;
+                const chunks: string[][] = [];
+                for (let i = 0; i < validFilenames.length; i += CHUNK_SIZE) {
+                    chunks.push(validFilenames.slice(i, i + CHUNK_SIZE));
+                }
 
-                const listQuery = await supabase
-                    .from('processed_items')
-                    .select('*')
-                    .in('excel_filename', validFilenames)
-                    .order('processed_at', { ascending: false })
-                    .limit(50);
-                
-                recents = listQuery.data || [];
-                listError = listQuery.error;
+                // Fetch total count across all chunks
+                const countResults = await Promise.all(
+                    chunks.map(chunk => 
+                        supabase
+                            .from('processed_items')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('date_processed', dateToUse)
+                            .in('excel_filename', chunk)
+                    )
+                );
+
+                for (const res of countResults) {
+                    if (res.error) countError = res.error;
+                    orderCount += (res.count || 0);
+                }
+
+                // Fetch recent processed items (only first few chunks needed for top 50)
+                const recentChunks = chunks.slice(0, 3);
+                const listResults = await Promise.all(
+                    recentChunks.map(chunk =>
+                        supabase
+                            .from('processed_items')
+                            .select('*')
+                            .in('excel_filename', chunk)
+                            .order('processed_at', { ascending: false })
+                            .limit(50)
+                    )
+                );
+
+                const mergedList: any[] = [];
+                for (const res of listResults) {
+                    if (res.error) listError = res.error;
+                    if (res.data) mergedList.push(...res.data);
+                }
+                mergedList.sort((a, b) => new Date(b.processed_at).getTime() - new Date(a.processed_at).getTime());
+                recents = mergedList.slice(0, 50);
             }
 
             const [

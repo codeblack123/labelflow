@@ -50,21 +50,32 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack }) => {
         setError(null);
 
         try {
-            let finalUsername = email.toLowerCase().trim();
-            if (isEmailFormat && !finalUsername.includes('@')) {
-                finalUsername += '@labelflow.com';
-            }
+            const cleanInput = email.toLowerCase().trim();
+            const withDomain = cleanInput.includes('@') ? cleanInput : `${cleanInput}@labelflow.com`;
+            const withoutDomain = cleanInput.replace('@labelflow.com', '');
 
-            // Check against auth_users table
+            // Check against auth_users table (matches either exact input, with domain, or without domain)
             const { data, error } = await supabase
                 .from('auth_users')
                 .select('*')
-                .eq('username', finalUsername)
+                .or(`username.eq.${cleanInput},username.eq.${withDomain},username.eq.${withoutDomain}`)
                 .eq('password', password)
                 .maybeSingle();
 
-            if (error || !data) {
+            if (error) {
+                console.error('[LoginPage] Supabase query error:', error);
+                if (error.code === '42501' || error.message?.includes('permission denied')) {
+                    throw new Error('Izin akses database Supabase terblokir (Permission Denied/RLS). Silakan jalankan script SQL GRANT di Supabase SQL Editor.');
+                }
+                throw new Error(error.message || 'Terjadi kesalahan saat memverifikasi akun.');
+            }
+
+            if (!data) {
                 throw new Error('Username atau password tidak valid. Silakan periksa kembali data Anda.');
+            }
+
+            if (data.status && data.status.toLowerCase() === 'nonaktif') {
+                throw new Error('Akun Anda dinonaktifkan. Silakan hubungi administrator.');
             }
 
             // Handle Remember Me
