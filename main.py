@@ -295,18 +295,27 @@ async def supabase_fetch(method: str, endpoint: str, data=None, params=None, hea
             print(f"Internal Fetch Error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
+def sanitize_gudang_id(gid: Optional[str]) -> Optional[str]:
+    if not gid:
+        return None
+    s = str(gid).strip()
+    if s in ("", "null", "undefined", "None"):
+        return None
+    return s
+
 async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = None, order_by: str = "custom_id", order_dir: str = "asc", is_multi_search: bool = False, gudang_id: str = None):
     # Helper to fetch SKU mappings (Internal Use)
     # If limit is None, fetches ALL data (handling 1000 row limit of Supabase)
     try:
+        clean_gid = sanitize_gudang_id(gudang_id)
         # Validasi order_by untuk keamanan (menghindari SQL injection via URL)
         safe_cols = ["custom_id", "sku", "rak"]
         if order_by not in safe_cols:
             order_by = "custom_id"
             
         def apply_search(p: dict):
-            if gudang_id:
-                p["gudang_id"] = f"eq.{gudang_id}"
+            if clean_gid:
+                p["gudang_id"] = f"eq.{clean_gid}"
             if not search: return
             if is_multi_search:
                 import re
@@ -318,7 +327,7 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
                 p["or"] = f"(sku.ilike.%{search}%,custom_id.ilike.%{search}%)"
         
         if limit is None:
-            # Fetch ALL
+            # Fetch ALL for the given warehouse
             all_data = []
             chunk_size = 1000
             current_offset = 0
@@ -333,7 +342,7 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
                 apply_search(params)
                     
                 chunk = await supabase_fetch("GET", "sku_mappings", params=params)
-                if not chunk:
+                if not chunk or not isinstance(chunk, list):
                     break
                 all_data.extend(chunk)
                 if len(chunk) < chunk_size:
@@ -364,44 +373,15 @@ async def fetch_sku_mappings(limit: int = None, offset: int = 0, search: str = N
         return []
 
 async def count_sku_mappings(search: str = None):
-    # Helper to count total
-    endpoint = "sku_mappings?select=custom_id&limit=1" # Minimal fetch, rely on content-range header? 
-    # Current supabase_fetch doesn't return headers.
-    # Workaround: Use head=true logic or count=exact prefer header.
-    # Our supabase_fetch implementation is simple.
-    # Let's use a separate fetch with 'count=exact' Header if we can modify supabase_fetch, 
-    # OR since we don't want to touch supabase_fetch too much, use a 'select count' if possible? No PostgREST doesn't support 'select=count'.
-    
-    # We will assume for now we can't easily get count without fetching all ID's or modifying supabase_fetch.
-    # For performance, maybe just fetching IDs is light enough?
-    # Or modify supabase_fetch to support returning count.
-    
-    # Let's try fetching just IDs with search to count?
-    # If dataset is 50k, fetching 50k IDs is ~2MB. Acceptable? Maybe.
-    # Better: Update supabase_fetch later. For now, let's use the 'Fetch All IDs' strategy for counting if search is active.
-    # If search inactive, we might cache the count?
-    
-    # Actually, let's just use the `fetch_sku_mappings(limit=None)` on a valid search and count the length.
-    # It's not optimal but it works without rewriting core utils.
-    
-    # WAIT! PostgREST supports HEAD request for count.
-    # supabase_fetch logic: method="HEAD".
-    # But `supabase_fetch` returns `response.json()` or `text`. Head has no body.
-    # We need headers 'Content-Range'.
-    
-    # Let's stick to "Fetch All" for "Fetch All" endpoint.
-    # For Paginated Endpoint, if we need count, we might have to be expensive for now or skip count.
-    # User asked for pagination. Next/Prev is fine without "Page 1 of 100".
-    # But "Page 1 of X" is better.
-    
-    # Let's implement a simple count by fetching all IDs (lightweight) if search is present?
-    # Or just returning the page.
     pass
 
 @app.get("/settings/sku-mappings")
 async def get_sku_mappings(gudang_id: Optional[str] = None):
-    # Returns ALL mappings (optionally filtered by gudang_id)
-    return await fetch_sku_mappings(limit=None, gudang_id=gudang_id)
+    # Returns ALL mappings strictly for the specified warehouse
+    clean_gid = sanitize_gudang_id(gudang_id)
+    if not clean_gid:
+        return []
+    return await fetch_sku_mappings(limit=None, gudang_id=clean_gid)
 
 @app.get("/settings/sku-mappings-paginated")
 async def get_sku_mappings_paginated(
@@ -491,20 +471,11 @@ async def delete_all_sku_mappings(gudang_id: str):
         if not gudang_id:
             raise HTTPException(status_code=400, detail="gudang_id harus disertakan untuk mencegah penghapusan seluruh data")
             
-        print(f"[Admin] Nuclear Delete All (gudang: {gudang_id}): Deleting rows directly...")
-        # Cara paling efisien: DELETE dengan filter 'neq' yang selalu true
-        # Ini menghapus SEMUA baris tanpa perlu fetch ID dulu (tidak ada limit 1000)
-        params = {
-            "custom_id": "neq.________NEVER_MATCH________",
-            "gudang_id": f"eq.{gudang_id}"
-        }
-            
-        await supabase_fetch("DELETE", "sku_mappings",
-            params=params,
+        print(f"[Admin] Delete All (gudang: {gudang_id}): Deleting rows directly...")
+        await supabase_fetch("DELETE", f"sku_mappings?gudang_id=eq.{gudang_id}",
             headers={"Prefer": "return=minimal"}
         )
-        # Backup: jika filter params tidak bekerja, coba cara alternatif
-        print("[Admin] Nuclear Delete completed.")
+        print("[Admin] Delete completed.")
         return {"success": True}
         
     except Exception as e:
@@ -1815,11 +1786,11 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
         duplicate_count = 0
         empty_count = 0
         
-        for index, row in df.iterrows():
-            raw_id = str(row[id_col]).strip() if id_col in row else ""
-            raw_sku = str(row[sku_col]).strip() if sku_col in row else ""
-            raw_rak = str(row[rak_col]).strip() if rak_col and rak_col in row else ""
-            raw_lorong = str(row[lorong_col]).strip() if lorong_col and lorong_col in row else ""
+        for row in df.to_dict('records'):
+            raw_id = str(row.get(id_col, '')).strip()
+            raw_sku = str(row.get(sku_col, '')).strip()
+            raw_rak = str(row.get(rak_col, '')).strip() if rak_col else ""
+            raw_lorong = str(row.get(lorong_col, '')).strip() if lorong_col else ""
             
             # Clean string representations of empty/nan
             if raw_sku in ('-', 'nan', 'None', 'NaN', 'null', '<NA>'):
@@ -1872,38 +1843,54 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
         except Exception as e:
             print(f"[IMPORT] Warning: Clear failed but continuing insertion: {e}")
             
-        # 3. Batch Upsert dengan fallback per-item jika ada batch gagal
+        # 3. Batch Upsert dengan concurrent chunk 500
         failed_count = 0
         inserted = 0
         if to_import:
-            chunk_size = 200
-            total_batches = (len(to_import) + chunk_size - 1) // chunk_size
-            for i in range(0, len(to_import), chunk_size):
-                chunk = to_import[i:i + chunk_size]
-                batch_num = i // chunk_size + 1
-                try:
-                    await supabase_fetch(
-                        "POST", "sku_mappings?on_conflict=sku,gudang_id",
-                        data=chunk,
-                        headers={
-                            "Prefer": "resolution=merge-duplicates,return=minimal"
-                        }
-                    )
-                    inserted += len(chunk)
-                    print(f"[IMPORT] Batch {batch_num}/{total_batches} OK ({inserted}/{len(to_import)})")
-                except Exception as batch_e:
-                    print(f"[IMPORT] Batch {batch_num} failed ({batch_e}), retrying row-by-row...")
-                    for item in chunk:
-                        try:
-                            await supabase_fetch(
-                                "POST", "sku_mappings?on_conflict=sku,gudang_id",
-                                data=[item],
-                                headers={"Prefer": "resolution=merge-duplicates,return=minimal"}
-                            )
-                            inserted += 1
-                        except Exception as item_e:
-                            print(f"[IMPORT] Failed SKU '{item.get('sku')}': {item_e}")
-                            failed_count += 1
+            chunk_size = 500
+            chunks = [to_import[i:i + chunk_size] for i in range(0, len(to_import), chunk_size)]
+            
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async def insert_chunk(chunk, batch_idx):
+                    nonlocal inserted, failed_count
+                    req_headers = {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_KEY}",
+                        "Content-Type": "application/json",
+                        "Prefer": "resolution=merge-duplicates,return=minimal"
+                    }
+                    try:
+                        res = await client.post(
+                            f"{SUPABASE_URL}/rest/v1/sku_mappings?on_conflict=sku,gudang_id",
+                            headers=req_headers,
+                            json=chunk
+                        )
+                        if res.status_code >= 400:
+                            raise Exception(f"HTTP {res.status_code}: {res.text}")
+                        inserted += len(chunk)
+                        print(f"[IMPORT] Batch {batch_idx + 1}/{len(chunks)} OK ({len(chunk)} rows)")
+                    except Exception as batch_e:
+                        print(f"[IMPORT] Batch {batch_idx + 1} failed ({batch_e}), retrying row-by-row...")
+                        for item in chunk:
+                            try:
+                                res_item = await client.post(
+                                    f"{SUPABASE_URL}/rest/v1/sku_mappings?on_conflict=sku,gudang_id",
+                                    headers=req_headers,
+                                    json=[item]
+                                )
+                                if res_item.status_code >= 400:
+                                    raise Exception(res_item.text)
+                                inserted += 1
+                            except Exception as item_e:
+                                print(f"[IMPORT] Failed SKU '{item.get('sku')}': {item_e}")
+                                failed_count += 1
+
+                semaphore = asyncio.Semaphore(4)
+                async def sem_task(chunk, idx):
+                    async with semaphore:
+                        await insert_chunk(chunk, idx)
+
+                await asyncio.gather(*[sem_task(c, i) for i, c in enumerate(chunks)])
                 
         return {
             "success": True, 
@@ -1924,23 +1911,41 @@ async def import_sku_mappings(file: UploadFile = File(...), gudang_id: str = For
 
 @app.get("/settings/export-sku")
 async def export_sku_mappings(gudang_id: Optional[str] = Query(None)):
-    mappings = await get_sku_mappings(gudang_id=gudang_id) 
+    clean_gid = sanitize_gudang_id(gudang_id)
+    warehouse_name = "Semua_Gudang"
+    
+    if clean_gid:
+        try:
+            wh_data = await supabase_fetch("GET", f"warehouses?id=eq.{clean_gid}&select=name")
+            if wh_data and isinstance(wh_data, list) and len(wh_data) > 0:
+                raw_name = wh_data[0].get("name", "Gudang")
+                warehouse_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', raw_name)
+        except Exception as e:
+            print(f"[EXPORT SKU] Failed to fetch warehouse name: {e}")
+            warehouse_name = "Gudang"
+        mappings = await get_sku_mappings(gudang_id=clean_gid)
+    else:
+        mappings = []
         
     df = pd.DataFrame(mappings)
     if not df.empty:
-         df = df.rename(columns={'id': 'ID', 'sku': 'SKU', 'rak': 'RAK'})
+        df = df.rename(columns={'id': 'ID', 'sku': 'SKU', 'rak': 'RAK'})
+        cols = [c for c in ['ID', 'SKU', 'RAK'] if c in df.columns]
+        df = df[cols]
     else:
-         df = pd.DataFrame(columns=['ID', 'SKU', 'RAK'])
+        df = pd.DataFrame(columns=['ID', 'SKU', 'RAK'])
          
     output = io.BytesIO()
+    sheet_title = f"SKU {warehouse_name}"[:31]
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='SKU Mappings')
-        worksheet = writer.sheets['SKU Mappings']
+        df.to_excel(writer, index=False, sheet_name=sheet_title)
+        worksheet = writer.sheets[sheet_title]
         worksheet.set_column('A:A', 15)
         worksheet.set_column('B:B', 30)
+        worksheet.set_column('C:C', 20)
         
     output.seek(0)
-    filename = "SKU_Mappings_Export.xlsx"
+    filename = f"SKU_Mappings_{warehouse_name}.xlsx"
     return StreamingResponse(
         output, 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -3850,8 +3855,8 @@ async def generate_packing_list(date: str, excel: str, pdf_name: str = None, gud
 
         sku_map = {}
         try:
-             # Reuse existing fetch logic (it's async, but we are in async def)
-             mappings = await get_sku_mappings(gudang_id=gudang_id)
+             clean_gid = sanitize_gudang_id(gudang_id)
+             mappings = await get_sku_mappings(gudang_id=clean_gid)
              # Create lookup: Normalized SKU -> CustomID
              # Mappings in DB is {id, sku} where 'id' is actually the custom_id due to get_sku_mappings transformation
              
@@ -3860,7 +3865,7 @@ async def generate_packing_list(date: str, excel: str, pdf_name: str = None, gud
                  if norm_key: # Skip empty keys
                      sku_map[norm_key] = str(m['id']) # 'id' here is custom_id e.g. "0005"
              
-             print(f"[PACKING LIST] Loaded {len(sku_map)} mappings (Normalized). Sample: {list(sku_map.items())[:3]}")
+             print(f"[PACKING LIST] Loaded {len(sku_map)} mappings (Normalized) for warehouse '{clean_gid}'. Sample: {list(sku_map.items())[:3]}")
         except Exception as e:
              print(f"[PACKING LIST] Failed to load mappings: {e}")
              sku_map = {}
@@ -5890,12 +5895,15 @@ async def process_labels(
             is_sort_rak_msku = False
 
         rak_map = {}
-        if is_extended:
+        clean_gid = sanitize_gudang_id(gudang_id)
+        if is_extended or sort_by_sku_count or is_sort_rak_msku:
             try:
-                mappings = await get_sku_mappings(gudang_id=gudang_id)
+                mappings = await get_sku_mappings(gudang_id=clean_gid)
                 rak_map = {m['sku'].strip().upper(): {"rak": m.get('rak', ''), "id": m.get('id', '')} for m in mappings}
-            except:
-                pass
+                print(f"[PROCESS] Loaded {len(rak_map)} SKU mappings for warehouse '{clean_gid}'")
+            except Exception as e:
+                print(f"[PROCESS] Failed to load sku mappings for warehouse '{clean_gid}': {e}")
+                rak_map = {}
 
         # Fetch label table config (ukuran kolom, font, border)
         try:
@@ -7215,12 +7223,15 @@ async def process_labels_with_stats(
             is_sort_rak_msku = False
 
         rak_map = {}
-        if is_extended:
+        clean_gid = sanitize_gudang_id(gudang_id)
+        if is_extended or sort_by_sku_count or is_sort_rak_msku:
             try:
-                mappings = await get_sku_mappings(gudang_id=gudang_id)
+                mappings = await get_sku_mappings(gudang_id=clean_gid)
                 rak_map = {m['sku'].strip().upper(): {"rak": m.get('rak', ''), "id": m.get('id', '')} for m in mappings}
-            except:
-                pass
+                print(f"[PROCESS STATS] Loaded {len(rak_map)} SKU mappings for warehouse '{clean_gid}'")
+            except Exception as e:
+                print(f"[PROCESS STATS] Failed to load sku mappings for warehouse '{clean_gid}': {e}")
+                rak_map = {}
 
         # Fetch label table config (ukuran kolom, font, border)
         try:
@@ -8613,7 +8624,8 @@ async def toolkit_generate_packing_list(
         # 1. Fetch Mapping ID & Rak
         rak_map = {}
         try:
-            mappings = await get_sku_mappings(gudang_id=gudang_id)
+            clean_gid = sanitize_gudang_id(gudang_id)
+            mappings = await get_sku_mappings(gudang_id=clean_gid)
             rak_map = {m['sku'].strip().upper(): {"rak": m.get('rak', ''), "id": m.get('id', '')} for m in mappings}
         except Exception as e:
             print(f"[PACKING LIST] Failed to fetch mappings: {e}")

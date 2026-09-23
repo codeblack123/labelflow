@@ -347,11 +347,12 @@ const AdminSkuDatabase: React.FC<AdminSkuDatabaseProps> = ({ showToast, user }) 
     };
 
     const handleExport = () => {
-        // window.open(`${API_CONFIG.BASE_URL}/settings/export-sku`, '_blank');
-        // If there's search term, we might want to export only filtered?
-        // But requested: "export semua data di pagination" usually means all records.
-        // The backend /settings/export-sku already exports ALL.
-        window.open(`${API_CONFIG.BASE_URL}/settings/export-sku`, '_blank');
+        if (!activeWarehouseId) {
+            if (showToast) showToast('Pilih gudang terlebih dahulu sebelum export.');
+            return;
+        }
+        const url = `${API_CONFIG.BASE_URL}/settings/export-sku?gudang_id=${encodeURIComponent(activeWarehouseId)}`;
+        window.open(url, '_blank');
     };
 
     const handleDownloadTemplate = () => {
