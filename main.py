@@ -29,6 +29,7 @@ from openpyxl import load_workbook
 import zipfile
 import math
 import json
+import asyncio
 
 
 # --- FONT REGISTRATION ---
