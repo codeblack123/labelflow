@@ -125,16 +125,41 @@ const ToolkitLabelSplitter: React.FC<ToolkitLabelSplitterProps> = ({ showToast }
 
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm text-gray-600">Maksimal Resi/Pesanan per Sheet</label>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3 flex-wrap">
                                     <input
                                         type="number"
                                         min="10"
                                         max="500"
-                                        value={batchLimit}
-                                        onChange={(e) => setBatchLimit(parseInt(e.target.value))}
-                                        className="w-24 px-4 py-2 border border-gray-300 rounded-lg text-center font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        value={batchLimit || ''}
+                                        onChange={(e) => setBatchLimit(parseInt(e.target.value) || 0)}
+                                        className="w-24 px-4 py-2 border border-gray-300 rounded-lg text-center font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
                                     />
-                                    <span className="text-sm text-gray-500">Resi/Order</span>
+                                    <span className="text-sm font-medium text-gray-600">Resi/Order</span>
+
+                                    <div className="flex items-center gap-1.5 ml-1 border-l border-gray-300 pl-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setBatchLimit(25)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm active:scale-95 ${
+                                                batchLimit === 25
+                                                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-indigo-200'
+                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300'
+                                            }`}
+                                        >
+                                            25
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setBatchLimit(50)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm active:scale-95 ${
+                                                batchLimit === 50
+                                                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-indigo-200'
+                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300'
+                                            }`}
+                                        >
+                                            50
+                                        </button>
+                                    </div>
                                 </div>
                                 <p className="text-xs text-gray-500">
                                     Total ID Pesanan unik per sheet akan mendekati angka ini.
