@@ -941,17 +941,24 @@ async def split_excel_v3(
         
         print(f"[SPLITTER V3 Strict] Total: {total_orders}. Batches: {num_batches}. Processed: {num_processed}. Remaining: {num_remaining}")
         
-        # 4. Distribute Processed Units
+        # 4. Distribute Processed Units with STRICT batch_limit order count constraint
         batches = [[] for _ in range(num_batches)]
         batch_loads = [0] * num_batches
+        batch_order_counts = [0] * num_batches
         
         if num_batches > 0:
             for unit in processed_units:
-                min_load = min(batch_loads)
-                target_batch_idx = batch_loads.index(min_load)
+                # Cari batch yang belum mencapai batas maksimal resi (batch_limit)
+                eligible_indices = [i for i in range(num_batches) if batch_order_counts[i] < batch_limit]
+                if not eligible_indices:
+                    eligible_indices = list(range(num_batches))
+                
+                # Dari batch yang masih muat, pilih yang total beban SKU-nya paling sedikit
+                target_batch_idx = min(eligible_indices, key=lambda i: batch_loads[i])
                 
                 batches[target_batch_idx].append(unit['df'])
                 batch_loads[target_batch_idx] += unit['workload']
+                batch_order_counts[target_batch_idx] += 1
                 
         # Compile Batch DataFrames
         final_batches = []
@@ -973,18 +980,18 @@ async def split_excel_v3(
         with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
              # --- SUMMARY SHEET ---
              summary_data = []
-             summary_data.append(["RINGKASAN PROSES (VBA Logic)", ""])
-             summary_data.append(["Tanggal", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-             summary_data.append(["Total Resi Awal", total_orders])
-             summary_data.append(["Resi Diproses", num_processed])
-             summary_data.append(["Sisa Resi", num_remaining])
-             summary_data.append(["Batch Dibuat", f"{num_batches} (@{batch_limit} resi)"])
-             summary_data.append(["", ""])
-             summary_data.append(["BEBAN KERJA PER BATCH", "JUMLAH SKU"])
+             summary_data.append(["RINGKASAN PROSES (VBA Logic)", "", ""])
+             summary_data.append(["Tanggal", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""])
+             summary_data.append(["Total Resi Awal", f"{total_orders} Resi", ""])
+             summary_data.append(["Resi Diproses", f"{num_processed} Resi", ""])
+             summary_data.append(["Sisa Resi (Sheet REMAINDER_SISA)", f"{num_remaining} Resi", ""])
+             summary_data.append(["Batch Dibuat", f"{num_batches} Batch (@{batch_limit} resi)", ""])
+             summary_data.append(["", "", ""])
+             summary_data.append(["DAFTAR BATCH", "JUMLAH RESI", "BEBAN KERJA (JUMLAH SKU)"])
              
              for i, items_count in enumerate(batch_loads):
                  batch_name = f"Batch {i+1}"
-                 summary_data.append([batch_name, f"{items_count} SKU"])
+                 summary_data.append([batch_name, f"{batch_order_counts[i]} Resi", f"{items_count} SKU"])
                  
              # SUMMARY
              pd.DataFrame(summary_data).to_excel(writer, sheet_name="SUMMARY", index=False, header=False)
@@ -1001,7 +1008,10 @@ async def split_excel_v3(
              # BATCH SHEETS
              for i, batch_df in enumerate(final_batches):
                  b_items = len(batch_df)
-                 sheet_name = f"Batch {i+1} ({b_items} SKUs)"
+                 num_orders = len(batch_df[id_col].unique())
+                 sheet_name = f"Batch {i+1} ({num_orders} Resi - {b_items} SKU)"
+                 if len(sheet_name) > 31:
+                     sheet_name = f"Batch {i+1} ({num_orders} Resi)"
                  batch_df.to_excel(writer, sheet_name=sheet_name, index=False)
              
         output_buffer.seek(0)
