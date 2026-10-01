@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiUpload, FiScissors, FiDownload, FiCheckCircle, FiAlertCircle, FiFileText, FiRefreshCw } from 'react-icons/fi';
 import axios from 'axios';
 import { API_CONFIG } from '../constants';
@@ -9,10 +9,25 @@ interface ToolkitLabelSplitterProps {
 
 const ToolkitLabelSplitter: React.FC<ToolkitLabelSplitterProps> = ({ showToast }) => {
     const [file, setFile] = useState<File | null>(null);
-    const [batchLimit, setBatchLimit] = useState<number>(50);
+    const [batchLimit, setBatchLimit] = useState<number>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('toolkit_splitter_batch_limit');
+            if (saved) {
+                const parsed = parseInt(saved, 10);
+                if (!isNaN(parsed) && parsed > 0) return parsed;
+            }
+        }
+        return 25;
+    });
     const [processing, setProcessing] = useState(false);
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && batchLimit > 0) {
+            localStorage.setItem('toolkit_splitter_batch_limit', batchLimit.toString());
+        }
+    }, [batchLimit]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
