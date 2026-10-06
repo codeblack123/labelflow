@@ -30,6 +30,7 @@ import SqlEditor from './components/SqlEditor';
 import RunningTextBar from './components/RunningTextBar';
 import { saveSabotageFiles, getSabotageFiles, clearSabotageVault } from './utils/idbSabotage';
 import ProductivityTimer from './components/ProductivityTimer';
+import BulkUploadQueue from './components/BulkUploadQueue';
 
 interface DuplicateAWB {
     id_pesanan: string;
@@ -125,12 +126,12 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | undefined>();
     const [pickerName, setPickerName] = useState('');
     // Menu state with persistence
-    const [activeMenu, setActiveMenu] = useState<'upload' | 'upload2' | 'history' | 'dashboard' | 'bulkUpload' | 'bulkUploadPro' | 'bulkUploadTest' | 'bulkUploadTes' | 'bulkUploadTestMsku' | 'admin' | 'toolkit' | 'profil' | 'settings' | 'uploadFlex' | 'uploadTest' | 'uploadTestMsku'>(() => {
+    const [activeMenu, setActiveMenu] = useState<'upload' | 'upload2' | 'history' | 'dashboard' | 'bulkUpload' | 'bulkUploadPro' | 'bulkUploadTest' | 'bulkUploadTes' | 'bulkUploadTestMsku' | 'admin' | 'toolkit' | 'profil' | 'settings' | 'uploadFlex' | 'uploadTest' | 'uploadTestMsku' | 'bulkUploadQueue'>(() => {
         // Check URL first
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const menuParam = params.get('menu');
-            if (menuParam && ['upload', 'upload2', 'history', 'dashboard', 'bulkUpload', 'bulkUploadPro', 'admin', 'toolkit', 'profil', 'settings', 'uploadFlex', 'uploadTest', 'bulkUploadTest', 'bulkUploadTes'].includes(menuParam)) {
+            if (menuParam && ['upload', 'upload2', 'history', 'dashboard', 'bulkUpload', 'bulkUploadPro', 'admin', 'toolkit', 'profil', 'settings', 'uploadFlex', 'uploadTest', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadQueue'].includes(menuParam)) {
                 return menuParam as any;
             }
 
@@ -160,7 +161,7 @@ const App: React.FC = () => {
     // Global Menu Settings
     const DEFAULT_MENUS = [
         'dashboard', 'upload', 'upload2', 'uploadTest', 'history', 
-        'bulkUpload', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadPro', 'uploadFlex', 'toolkit', 'admin', 'profil', 'settings'
+        'bulkUpload', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadPro', 'uploadFlex', 'bulkUploadQueue', 'toolkit', 'admin', 'profil', 'settings'
     ];
     const [menuOrder, setMenuOrder] = useState<string[]>(() => {
         if (typeof window !== 'undefined') {
@@ -177,12 +178,18 @@ const App: React.FC = () => {
         if (typeof window !== 'undefined') {
             try {
                 const cached = localStorage.getItem('app_hidden_menus');
-                if (cached) return JSON.parse(cached);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (!parsed.includes('bulkUploadQueue')) {
+                        parsed.push('bulkUploadQueue');
+                    }
+                    return parsed;
+                }
             } catch (e) {
                 console.error("Failed to parse cached hidden menus", e);
             }
         }
-        return ['upload', 'upload2', 'bulkUpload', 'bulkUploadPro', 'uploadFlex', 'settings'];
+        return ['upload', 'upload2', 'bulkUpload', 'bulkUploadPro', 'uploadFlex', 'settings', 'bulkUploadQueue'];
     });
     const [skipPinMenus, setSkipPinMenus] = useState<string[]>(() => {
         if (typeof window !== 'undefined') {
@@ -480,30 +487,35 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            devBufferRef.current = (devBufferRef.current + e.key).slice(-20);
-            if (devBufferRef.current.toLowerCase().endsWith('devmode')) {
-                // Only allow users with role 'developer' to toggle DevMode
-                if (user?.role === 'developer') {
+            // Shortcut Ctrl+Shift+S atau Alt+S untuk membuka/menutup SQL Editor
+            if ((e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) || (e.altKey && (e.key === 's' || e.key === 'S'))) {
+                e.preventDefault();
+                setShowSqlEditor(prev => !prev);
+                return;
+            }
+            if (e.key && e.key.length === 1) {
+                devBufferRef.current = (devBufferRef.current + e.key).slice(-20);
+                if (devBufferRef.current.toLowerCase().endsWith('devmode')) {
                     setDevMode(prev => {
                         const newState = !prev;
                         localStorage.setItem('global_devmode', newState.toString());
                         if (typeof window !== 'undefined') {
-                            const event = new CustomEvent('app_toast', { detail: newState ? '🔓 DevMode Aktif! Fitur pengembang terbuka.' : '🔒 DevMode Nonaktif.' });
+                            const event = new CustomEvent('app_toast', { detail: newState ? '🔓 DevMode Aktif! Menu Queue Batch terbuka.' : '🔒 DevMode Nonaktif. Menu Queue Batch disembunyikan.' });
                             window.dispatchEvent(event);
                         }
                         return newState;
                     });
-                } else {
-                    // If not developer, show a subtle hint or do nothing
-                    console.log('[DevMode] Access denied: Role developer required');
-                    const event = new CustomEvent('app_toast', { detail: '⚠️ Akses ditolak. Hanya Developer yang bisa mengaktifkan mode ini.' });
-                    window.dispatchEvent(event);
+                    devBufferRef.current = '';
                 }
-                devBufferRef.current = '';
             }
         };
+        const handleOpenSql = () => setShowSqlEditor(true);
+        window.addEventListener('open_sql_editor', handleOpenSql);
         window.addEventListener('keydown', handleGlobalKeyDown);
-        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleGlobalKeyDown);
+            window.removeEventListener('open_sql_editor', handleOpenSql);
+        };
     }, [user]);
 
     // Global Toast Listener
@@ -627,6 +639,8 @@ const App: React.FC = () => {
         file_path?: string;
         file_size?: number;
         status?: string;
+        is_running?: boolean;
+        is_old?: boolean;
     } | null>(null);
     const [isAutoUpdatingSuccess, setIsAutoUpdatingSuccess] = useState(false);
 
@@ -3736,7 +3750,7 @@ const App: React.FC = () => {
                 setFlexProcessedCount(prev => prev + 1);
 
                 setFlexStats({
-                    matched_awbs: stats.matched_with_awb || stats.matched_awbs || [],
+                    matched_awbs: stats.matched_awbs || (stats.matched_with_awb ? stats.matched_with_awb.map(x => x.awb) : []),
                     unmatched_excel_awbs: stats.unmatched_excel_awbs || [],
                     unmatched_pdf_awbs: stats.unmatched_pdf_awbs || [],
                     duplicate_awbs: stats.duplicate_awbs || [],
@@ -4128,7 +4142,14 @@ const App: React.FC = () => {
                     <div className="hidden lg:flex items-center gap-3 xl:gap-5 flex-nowrap min-w-0">
                         {/* Nav links */}
                         <nav className="flex items-center gap-1 xl:gap-2.5 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                            {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')).map(menuId => {
+                            {menuOrder.filter(menuId => {
+                                if (menuId === 'bulkUploadQueue') return devMode;
+                                if (hiddenMenus.includes(menuId)) return false;
+                                if (menuId === 'profil') return false;
+                                if (!MENU_DEFINITIONS[menuId]) return false;
+                                if (menuId === 'admin' && !(user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')) return false;
+                                return true;
+                            }).map(menuId => {
                                 const def = MENU_DEFINITIONS[menuId];
                                 const isActive = activeMenu === menuId;
                                 return (
@@ -4284,7 +4305,14 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {menuOrder.filter(menuId => !hiddenMenus.includes(menuId) && menuId !== 'profil' && MENU_DEFINITIONS[menuId] && (menuId !== 'admin' || user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')).map(menuId => {
+                                {menuOrder.filter(menuId => {
+                                    if (menuId === 'bulkUploadQueue') return devMode;
+                                    if (hiddenMenus.includes(menuId)) return false;
+                                    if (menuId === 'profil') return false;
+                                    if (!MENU_DEFINITIONS[menuId]) return false;
+                                    if (menuId === 'admin' && !(user?.role === 'main' || user?.role === 'admin' || user?.role === 'developer')) return false;
+                                    return true;
+                                }).map(menuId => {
                                     const def = MENU_DEFINITIONS[menuId];
                                     const Icon = def.icon || FiLayout; // fallback icon
 
@@ -4369,7 +4397,7 @@ const App: React.FC = () => {
                 isActive={isProductivityTimerActive && (activeMenu === 'uploadTest' || activeMenu === 'bulkUploadTest' || activeMenu === 'bulkUploadTestMsku')} 
             />
 
-            <main className={`mx-auto px-4 py-4 md:py-8 transition-all duration-300 ${['admin', 'toolkit', 'dashboard', 'upload', 'upload2', 'uploadTest', 'uploadTestMsku', 'uploadFlex', 'history', 'bulkUpload', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadTestMsku', 'bulkUploadPro'].includes(activeMenu) ? 'max-w-7xl' : 'max-w-3xl'
+            <main className={`mx-auto px-4 py-4 md:py-8 transition-all duration-300 ${['admin', 'toolkit', 'dashboard', 'upload', 'upload2', 'uploadTest', 'uploadTestMsku', 'uploadFlex', 'history', 'bulkUpload', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadTestMsku', 'bulkUploadPro', 'bulkUploadQueue'].includes(activeMenu) ? 'max-w-7xl' : 'max-w-3xl'
                 }`}>
                 {activeMenu === 'dashboard' ? (
                     <Dashboard user={user} />
@@ -4513,7 +4541,7 @@ const App: React.FC = () => {
                                 </div>
                                 <button
                                     id="btn-process-flex"
-                                    onClick={startFlexProcessing}
+                                    onClick={() => startFlexProcessing()}
                                     disabled={!flexExcelFile || flexPdfFiles.length === 0}
                                     className={`px-10 py-3.5 rounded-xl font-bold text-lg tracking-wide transition-all duration-300 shadow-md transform hover:-translate-y-0.5 ${!flexExcelFile || flexPdfFiles.length === 0
                                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
@@ -4795,7 +4823,7 @@ const App: React.FC = () => {
                                     </div>
                                     <button
                                         id="btn-process-main"
-                                        onClick={startProcessing}
+                                        onClick={() => startProcessing()}
                                     disabled={!excelFile || pdfFiles.length === 0}
                                     className={`px-6 py-2.5 rounded-lg text-sm font-medium text-white ${(!excelFile || pdfFiles.length === 0)
                                         ? 'bg-gray-300 cursor-not-allowed'
@@ -5272,7 +5300,7 @@ const App: React.FC = () => {
 
                                     <button
                                         id="btn-process-test"
-                                        onClick={startTestProcessing}
+                                        onClick={() => startTestProcessing()}
                                         disabled={!testExcelFile || testPdfFiles.length === 0 || !pickerName.trim()}
                                         className={`w-full py-4 px-8 rounded-2xl font-extrabold text-base tracking-wide transition-all duration-300 flex items-center justify-center gap-3 shadow-lg cursor-pointer transform hover:-translate-y-0.5 ${(!testExcelFile || testPdfFiles.length === 0 || !pickerName.trim())
                                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
@@ -5947,7 +5975,7 @@ const App: React.FC = () => {
                             </div>
                         </div>
                     )
-                ) : activeMenu === 'uploadTest' ? (
+                ) : (activeMenu as string) === 'uploadTest' ? (
                     <div className="space-y-6 animate-in fade-in duration-300">
                         {/* Ultra Premium Header Banner */}
                         <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white rounded-3xl p-6 lg:p-8 shadow-xl shadow-slate-900/15 border border-slate-800/80 relative overflow-hidden">
@@ -6178,7 +6206,7 @@ const App: React.FC = () => {
 
                                     <button
                                         id="btn-process-test"
-                                        onClick={startTestProcessing}
+                                        onClick={() => startTestProcessing()}
                                         disabled={!testExcelFile || testPdfFiles.length === 0}
                                         className={`w-full py-4 px-8 rounded-2xl font-extrabold text-base tracking-wide transition-all duration-300 flex items-center justify-center gap-3 shadow-lg cursor-pointer transform hover:-translate-y-0.5 ${(!testExcelFile || testPdfFiles.length === 0)
                                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
@@ -6597,7 +6625,7 @@ const App: React.FC = () => {
                                     </div>
                                         </div>
                                         <button
-                                            onClick={startTestProcessing}
+                                            onClick={() => startTestProcessing()}
                                             disabled={!testExcelFile || testPdfFiles.length === 0}
                                             className={`px-12 py-4 rounded-2xl text-lg font-black text-white transition-all shadow-2xl active:scale-95 ${(!testExcelFile || testPdfFiles.length === 0)
                                                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
@@ -7845,7 +7873,7 @@ const App: React.FC = () => {
                                 </div>
 
                                 <button
-                                    onClick={startBulkProProcessing}
+                                    onClick={() => startBulkProProcessing()}
                                     disabled={!bulkProExcelFile || bulkProPdfFiles.length === 0 || bulkProStatus === ProcessStatus.PROCESSING || (() => {
                                         const pdfNames = bulkProPdfFiles.map(f => f.name);
                                         return pdfNames.length !== new Set(pdfNames).size;
@@ -8126,6 +8154,12 @@ const App: React.FC = () => {
                             localStorage.setItem('user_session', JSON.stringify(updatedUser));
                         }}
                     />
+                ) : activeMenu === 'bulkUploadQueue' ? (
+                    <BulkUploadQueue
+                        showToast={showToast}
+                        activeWarehouseId={activeWarehouseId}
+                        user={user}
+                    />
                 ) : (
                     <div className="text-center py-20 text-gray-500">
                         Menu belum tersedia
@@ -8252,6 +8286,7 @@ const MENU_DEFINITIONS: Record<string, { label: string; icon?: any }> = {
     bulkUploadTes: { label: 'Upload Massal Label' },
     bulkUploadPro: { label: 'Massal Pro' },
     uploadFlex: { label: 'Upload Flex' },
+    bulkUploadQueue: { label: 'Queue Batch' },
     toolkit: { label: 'Toolkit' },
     admin: { label: 'Admin' }
 };

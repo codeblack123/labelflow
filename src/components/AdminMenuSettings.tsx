@@ -16,6 +16,7 @@ const ALL_MENUS = [
     { id: 'bulkUploadTes', label: 'Upload Massal Label' },
     { id: 'bulkUploadPro', label: 'Massal Pro' },
     { id: 'uploadFlex', label: 'Upload Flex' },
+    { id: 'bulkUploadQueue', label: 'Queue Batch' },
     { id: 'toolkit', label: 'Toolkit' },
     { id: 'admin', label: 'Admin' },
     { id: 'profil', label: 'Profil' }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FiCheck, FiSettings, FiLayout, FiInfo, FiSave, FiRefreshCw, FiSliders } from 'react-icons/fi';
+import { FiCheck, FiSettings, FiLayout, FiInfo, FiSave, FiRefreshCw, FiSliders, FiPackage } from 'react-icons/fi';
 import axios from 'axios';
 import { API_CONFIG } from '../constants';
 
@@ -77,27 +77,68 @@ const SCALE = 350 / 270;
 const ptToPx = (pt: number) => Math.round(pt * SCALE);
 
 const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) => {
+    const [formatMode, setFormatMode] = useState<'standar' | 'extended' | 'bundling' | 'bundling_2'>('standar');
     const [isExtended, setIsExtended] = useState(false);
     const [isInterleaveSort, setIsInterleaveSort] = useState(false);
     const [cfg, setCfg] = useState<LabelConfig>({ ...DEFAULTS });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'format' | 'standar' | 'extended'>('format');
+    const [activeTab, setActiveTab] = useState<'format' | 'standar' | 'extended' | 'bundling' | 'bundling_2'>('format');
+    // Bundling format config
+    const BUNDLING_DEFAULTS = {
+        col_jenis: 65, col_model: 113, col_varian: 55.5, col_qty: 38,
+        font_jenis: 9, font_model: 8, font_varian: 8, font_qty: 13.5,
+        row_height: 20,
+        align_model: 'left' as 'left' | 'center',
+    };
+    const [bCfg, setBCfg] = useState(BUNDLING_DEFAULTS);
+    const updateBCfg = (key: keyof typeof BUNDLING_DEFAULTS, val: any) =>
+        setBCfg(prev => ({ ...prev, [key]: val }));
+
+    // Bundling 2 format config (Terpisah & Terisolasi - Kolom JENIS Ramping 2 Baris)
+    const BUNDLING_2_DEFAULTS = {
+        col_jenis: 65, col_model: 113, col_varian: 55.5, col_qty: 38,
+        font_jenis: 9, font_model: 8, font_varian: 8, font_qty: 13.5,
+        row_height: 20,
+        align_model: 'left' as 'left' | 'center',
+    };
+    const [b2Cfg, setB2Cfg] = useState(BUNDLING_2_DEFAULTS);
+    const updateB2Cfg = (key: keyof typeof BUNDLING_2_DEFAULTS, val: any) =>
+        setB2Cfg(prev => ({ ...prev, [key]: val }));
 
     const fetchSettings = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [featRes, cfgRes] = await Promise.all([
+            const [featRes, cfgRes, bundRes, bund2Res] = await Promise.all([
                 axios.get(`${API_CONFIG.BASE_URL}/settings/toolkit-features`),
                 axios.get(`${API_CONFIG.BASE_URL}/settings/label-table-config?t=${Date.now()}`),
+                axios.get(`${API_CONFIG.BASE_URL}/settings/label-bundling-config?t=${Date.now()}`).catch(() => ({ data: null })),
+                axios.get(`${API_CONFIG.BASE_URL}/settings/label-bundling-2-config?t=${Date.now()}`).catch(() => ({ data: null })),
             ]);
-            const feature = (featRes.data || []).find((f: any) => f.feature_key === 'label_extended_format');
-            setIsExtended(feature ? feature.is_locked : false);
+            const extFeature = (featRes.data || []).find((f: any) => f.feature_key === 'label_extended_format');
+            const bundFeature = (featRes.data || []).find((f: any) => f.feature_key === 'label_bundling_format');
+            const bund2Feature = (featRes.data || []).find((f: any) => f.feature_key === 'label_bundling_2_format');
+            
+            if (bund2Feature?.is_locked) {
+                setFormatMode('bundling_2');
+                setIsExtended(false);
+            } else if (bundFeature?.is_locked) {
+                setFormatMode('bundling');
+                setIsExtended(false);
+            } else if (extFeature?.is_locked) {
+                setFormatMode('extended');
+                setIsExtended(true);
+            } else {
+                setFormatMode('standar');
+                setIsExtended(false);
+            }
             
             const sortFeature = (featRes.data || []).find((f: any) => f.feature_key === 'label_sort_rak_msku');
             setIsInterleaveSort(sortFeature ? sortFeature.is_locked : false);
 
             if (cfgRes.data) setCfg({ ...DEFAULTS, ...cfgRes.data });
+            if (bundRes?.data) setBCfg(prev => ({ ...prev, ...bundRes.data }));
+            if (bund2Res?.data) setB2Cfg(prev => ({ ...prev, ...bund2Res.data }));
         } catch (err) {
             console.error('Failed to fetch settings', err);
         } finally {
@@ -107,20 +148,41 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
 
     useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
-    const handleToggleFormat = async (val: boolean) => {
+    const handleSelectFormatMode = async (mode: 'standar' | 'extended' | 'bundling' | 'bundling_2') => {
         setIsSaving(true);
         try {
-            await axios.post(`${API_CONFIG.BASE_URL}/settings/toolkit-features`, {
-                feature_key: 'label_extended_format',
-                is_locked: val,
-            });
-            setIsExtended(val);
-            if (showToast) showToast(`✓ Format Label: ${val ? 'Rak & ID' : 'Standar'}`);
+            await Promise.all([
+                axios.post(`${API_CONFIG.BASE_URL}/settings/toolkit-features`, {
+                    feature_key: 'label_extended_format',
+                    is_locked: mode === 'extended',
+                }),
+                axios.post(`${API_CONFIG.BASE_URL}/settings/toolkit-features`, {
+                    feature_key: 'label_bundling_format',
+                    is_locked: mode === 'bundling',
+                }),
+                axios.post(`${API_CONFIG.BASE_URL}/settings/toolkit-features`, {
+                    feature_key: 'label_bundling_2_format',
+                    is_locked: mode === 'bundling_2',
+                }),
+            ]);
+            setFormatMode(mode);
+            setIsExtended(mode === 'extended');
+            const labels: Record<string, string> = {
+                standar: 'Format Standar',
+                extended: 'Format Rak & ID',
+                bundling: 'Format Bundling',
+                bundling_2: 'Format Bundling 2 (Eksperimen / Revisi)'
+            };
+            if (showToast) showToast(`✓ Format Label Aktif: ${labels[mode]}`);
         } catch {
             if (showToast) showToast('❌ Gagal menyimpan format');
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleToggleFormat = (val: boolean) => {
+        handleSelectFormatMode(val ? 'extended' : 'standar');
     };
 
     const handleToggleInterleaveSort = async (val: boolean) => {
@@ -370,17 +432,23 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
             </div>
 
             {/* Tab Bar */}
-            <div className="flex bg-white border border-gray-200 rounded-xl p-1 shadow-sm gap-1">
+            <div className="flex bg-white border border-gray-200 rounded-xl p-1 shadow-sm gap-1 flex-wrap">
                 {([
                     { key: 'format', label: 'Format Label', icon: FiLayout },
                     { key: 'standar', label: 'Format Standar', icon: FiSliders },
                     { key: 'extended', label: 'Format Rak & ID', icon: FiSliders },
+                    { key: 'bundling', label: 'Format Bundling', icon: FiPackage },
+                    { key: 'bundling_2', label: 'Format Bundling 2', icon: FiPackage },
                 ] as const).map(tab => (
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key
-                            ? 'bg-blue-600 text-white shadow-md'
+                            ? tab.key === 'bundling_2'
+                                ? 'bg-purple-600 text-white shadow-md'
+                                : tab.key === 'bundling'
+                                ? 'bg-emerald-600 text-white shadow-md'
+                                : 'bg-blue-600 text-white shadow-md'
                             : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
                     >
                         <tab.icon className="w-4 h-4" />
@@ -391,33 +459,112 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
 
             {/* ---- TAB: FORMAT SELECT ---- */}
             {activeTab === 'format' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {[
-                        { val: false, title: 'Format Standar', cols: 2, desc: 'Hanya menampilkan kolom MSKU dan Qty pada tabel label. Desain bersih dan minimalis.' },
-                        { val: true, title: 'Format Rak & ID', cols: 3, desc: 'Menambahkan kolom Rak & ID (e.g. A-01-02). Memudahkan picker menemukan lokasi barang.' },
-                    ].map(opt => (
-                        <div key={String(opt.val)}
-                            onClick={() => !isSaving && handleToggleFormat(opt.val)}
-                            className={`relative p-6 rounded-2xl border-2 cursor-pointer transition-all group ${isExtended === opt.val
-                                ? 'border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/10'
-                                : 'border-gray-200 hover:border-blue-200 bg-white hover:shadow-lg'}`}
-                        >
-                            {isExtended === opt.val && (
-                                <div className="absolute top-4 right-4 bg-blue-500 text-white p-1 rounded-full">
-                                    <FiCheck className="w-4 h-4" />
+                        { 
+                            key: 'standar', 
+                            title: 'Format Standar', 
+                            cols: 2, 
+                            desc: 'Hanya menampilkan kolom MSKU dan Qty. Desain bersih dan minimalis.',
+                            headers: ['MSKU', 'QTY'],
+                            data: ['BAG-DCB-32/A4', '1'],
+                            theme: 'blue'
+                        },
+                        { 
+                            key: 'extended', 
+                            title: 'Format Rak & ID', 
+                            cols: 3, 
+                            desc: 'Menambahkan kolom Rak & ID (e.g. A-01-02). Memudahkan picker menemukan lokasi barang.',
+                            headers: ['RAK & ID', 'MSKU', 'QTY'],
+                            data: ['A-01-02', 'BAG-DCB-32/A4', '1'],
+                            theme: 'blue'
+                        },
+                        { 
+                            key: 'bundling', 
+                            title: 'Format Bundling', 
+                            cols: 4, 
+                            desc: 'Memecah SKU bundle menjadi baris satuan. Kolom: JENIS · MODEL · VARIAN · QTY.',
+                            headers: ['JENIS', 'MODEL', 'VARIAN', 'QTY'],
+                            data: ['PULPEN', 'GP-262', 'BLUE', '10'],
+                            badge: 'Bundling 1',
+                            theme: 'emerald'
+                        },
+                        { 
+                            key: 'bundling_2', 
+                            title: 'Format Bundling 2', 
+                            cols: 4, 
+                            desc: 'Format Bundling khusus rombak & revisi terpisah. Bebas diubah tanpa mengubah Format Bundling 1.',
+                            headers: ['JENIS', 'MODEL', 'VARIAN', 'QTY'],
+                            data: ['PULPEN', 'GP-262', 'BLUE', '10'],
+                            badge: 'Bundling 2',
+                            theme: 'purple'
+                        },
+                    ].map(opt => {
+                        const isSelected = formatMode === opt.key;
+                        const isEmerald = opt.theme === 'emerald';
+                        const isPurple = opt.theme === 'purple';
+                        return (
+                            <div key={opt.key}
+                                onClick={() => !isSaving && handleSelectFormatMode(opt.key as any)}
+                                className={`relative p-6 rounded-2xl border-2 cursor-pointer transition-all group ${
+                                    isSelected
+                                        ? isPurple
+                                            ? 'border-purple-500 bg-purple-50/50 ring-4 ring-purple-500/10'
+                                            : isEmerald
+                                            ? 'border-emerald-500 bg-emerald-50/50 ring-4 ring-emerald-500/10'
+                                            : 'border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/10'
+                                        : 'border-gray-200 hover:border-blue-200 bg-white hover:shadow-lg'
+                                }`}
+                            >
+                                {opt.badge && (
+                                    <div className={`absolute top-4 right-12 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                        isPurple
+                                            ? 'bg-purple-100 text-purple-700'
+                                            : isEmerald
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-blue-100 text-blue-700'
+                                    }`}>
+                                        {opt.badge}
+                                    </div>
+                                )}
+                                {isSelected && (
+                                    <div className={`absolute top-4 right-4 text-white p-1 rounded-full ${
+                                        isPurple ? 'bg-purple-500' : isEmerald ? 'bg-emerald-500' : 'bg-blue-500'
+                                    }`}>
+                                        <FiCheck className="w-4 h-4" />
+                                    </div>
+                                )}
+                                <h4 className={`font-bold text-lg mb-2 transition-colors ${
+                                    isSelected
+                                        ? (isPurple ? 'text-purple-700' : isEmerald ? 'text-emerald-700' : 'text-blue-700')
+                                        : 'text-gray-900'
+                                }`}>
+                                    {opt.title}
+                                </h4>
+                                <p className="text-gray-500 text-sm leading-relaxed mb-4">{opt.desc}</p>
+                                <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${opt.cols}, 1fr)` }}>
+                                        {opt.headers.map(h => (
+                                            <div key={h} className={`h-4 rounded ${
+                                                isPurple ? 'bg-purple-700' : isEmerald ? 'bg-emerald-700' : 'bg-gray-700'
+                                            }`} />
+                                        ))}
+                                        {opt.data.map((d, i) => (
+                                            <div key={i} className={`h-4 rounded ${
+                                                isPurple ? 'bg-purple-100' : isEmerald ? 'bg-emerald-100' : 'bg-blue-100'
+                                            }`} />
+                                        ))}
+                                    </div>
                                 </div>
-                            )}
-                            <h4 className={`font-bold text-lg mb-2 transition-colors ${isExtended === opt.val ? 'text-blue-700' : 'text-gray-900'}`}>{opt.title}</h4>
-                            <p className="text-gray-500 text-sm leading-relaxed mb-4">{opt.desc}</p>
-                            <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
-                                <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${opt.cols}, 1fr)` }}>
-                                    {Array.from({ length: opt.cols * 2 }).map((_, i) => (
-                                        <div key={i} className={`h-4 rounded ${i < opt.cols ? 'bg-gray-700' : 'bg-blue-100'}`} />
-                                    ))}
-                                </div>
+                                {opt.key === 'bundling' && (
+                                    <p className="text-[10px] text-emerald-600 mt-3 font-medium">⚙️ Atur kolom di tab "Format Bundling"</p>
+                                )}
+                                {opt.key === 'bundling_2' && (
+                                    <p className="text-[10px] text-purple-600 mt-3 font-medium">⚙️ Atur kolom di tab "Format Bundling 2"</p>
+                                )}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
@@ -600,8 +747,377 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
                 </div>
             )}
 
+            {/* ---- TAB: BUNDLING SETTINGS ---- */}
+            {activeTab === 'bundling' && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-6">
+                        <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3">⚙️ Pengaturan Format Bundling</h3>
+                        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                            <p className="text-[11px] text-emerald-700 leading-relaxed">
+                                Format ini menggunakan data dari <b>Database SKU Bundling</b>. SKU bundle (mis. PULPEN-1BOX/GP-262/BLUE) dipecah menjadi baris satuan dengan kolom JENIS, MODEL, VARIAN, dan QTY.
+                            </p>
+                        </div>
+                        <div className="space-y-5">
+                            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">Lebar Kolom (pt)</p>
+                            {[
+                                { key: 'col_jenis' as const, label: 'Lebar JENIS', min: 40, max: 120 },
+                                { key: 'col_model' as const, label: 'Lebar MODEL', min: 60, max: 180 },
+                                { key: 'col_varian' as const, label: 'Lebar VARIAN', min: 30, max: 120 },
+                                { key: 'col_qty' as const, label: 'Lebar QTY', min: 25, max: 80 },
+                            ].map(s => (
+                                <div key={s.key} className="space-y-1.5">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-semibold text-gray-600">{s.label}</label>
+                                        <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">{bCfg[s.key]}pt</span>
+                                    </div>
+                                    <input type="range" min={s.min} max={s.max} step={0.5} value={bCfg[s.key]}
+                                        onChange={e => updateBCfg(s.key, parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600" />
+                                    <div className="flex justify-between text-[10px] text-gray-400"><span>{s.min}pt</span><span>{s.max}pt</span></div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="space-y-5">
+                            <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">Ukuran Font (pt)</p>
+                            {[
+                                { key: 'font_jenis' as const, label: 'Font JENIS' },
+                                { key: 'font_model' as const, label: 'Font MODEL' },
+                                { key: 'font_varian' as const, label: 'Font VARIAN' },
+                                { key: 'font_qty' as const, label: 'Font QTY' },
+                                { key: 'row_height' as const, label: 'Tinggi Baris Min' },
+                            ].map(s => (
+                                <div key={s.key} className="space-y-1.5">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-semibold text-gray-600">{s.label}</label>
+                                        <span className="text-xs font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-100">{bCfg[s.key]}pt</span>
+                                    </div>
+                                    <input type="range" min={6} max={s.key === 'row_height' ? 50 : 24} step={0.5} value={bCfg[s.key]}
+                                        onChange={e => updateBCfg(s.key, parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pilihan Posisi Kolom MODEL: Kiri / Tengah */}
+                        <div className="space-y-2 pt-2 border-t border-gray-100">
+                            <label className="text-xs font-semibold text-gray-700">Posisi Kolom MODEL</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => updateBCfg('align_model', 'left')}
+                                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 ${
+                                        (bCfg.align_model || 'left') === 'left'
+                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    ⬅️ Rata Kiri
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => updateBCfg('align_model', 'center')}
+                                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 ${
+                                        bCfg.align_model === 'center'
+                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    ↔️ Rata Tengah
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400">Atur perataan teks pada data MODEL (Rata Kiri untuk kerapian nama SKU atau Rata Tengah).</p>
+                        </div>
+                    </div>
+                    {/* Live Preview Bundling */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+                        <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3">👁 Live Preview — Format Bundling</h3>
+                        <div className="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-4 flex flex-col items-center justify-center min-h-[200px] overflow-auto">
+                            <div className="overflow-x-auto max-w-full pb-2">
+                                <div style={{ backgroundColor: 'white', padding: '10px 7px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} className="mx-auto border border-gray-200">
+                                    <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed',
+                                        width: Math.round((bCfg.col_jenis + bCfg.col_model + bCfg.col_varian + bCfg.col_qty) * (350/271.5)) }}>
+                                        <tbody>
+                                            {/* Baris 0: Header PIC Mandiri (Merger 4 Kolom) */}
+                                            <tr style={{ background: cfg.header_bg, color: cfg.header_color }}>
+                                                <th colSpan={4} style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '4px 6px', fontSize: 11, textAlign: 'center', fontWeight: 'bold' }}>
+                                                    PIC : APRILIA MAULIDA NINGRUM
+                                                </th>
+                                            </tr>
+                                            {/* Baris 1: Header Kolom */}
+                                            <tr style={{ background: cfg.header_bg, color: cfg.header_color }}>
+                                                <th style={{ width: Math.round(bCfg.col_jenis * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    JENIS
+                                                </th>
+                                                <th style={{ width: Math.round(bCfg.col_model * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    MODEL
+                                                </th>
+                                                <th style={{ width: Math.round(bCfg.col_varian * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    VARIAN
+                                                </th>
+                                                <th style={{ width: Math.round(bCfg.col_qty * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    QTY
+                                                </th>
+                                            </tr>
+                                            {/* Row 1: SKU Reguler (Non-Bundling) Tanpa Varian */}
+                                            <tr>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '2px 4px', fontSize: Math.round(bCfg.font_jenis * 1.333), textAlign: 'center', lineHeight: '1.15' }}>
+                                                    PENCIL<br />COLOR
+                                                </td>
+                                                <td colSpan={2} style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 6px', fontSize: Math.round(bCfg.font_model * 1.333), textAlign: (bCfg.align_model || 'left') === 'center' ? 'center' : 'left' }}>
+                                                    CP-0133-SH12
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(bCfg.font_qty * 1.333), textAlign: 'center', fontWeight: 'bold' }}>
+                                                    12
+                                                </td>
+                                            </tr>
+                                            {/* Row 2: SKU Bundling Tanpa Varian (JENIS 2 Baris: MECHANICAL / PENCIL) */}
+                                            <tr>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '2px 4px', fontSize: Math.round(bCfg.font_jenis * 1.333), textAlign: 'center', lineHeight: '1.15', fontWeight: 500 }}>
+                                                    MECHANICAL<br />PENCIL
+                                                </td>
+                                                <td colSpan={2} style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 6px', fontSize: Math.round(bCfg.font_model * 1.333), textAlign: (bCfg.align_model || 'left') === 'center' ? 'center' : 'left' }}>
+                                                    <span style={{ fontSize: Math.round((bCfg.font_model + 2) * 1.333), fontWeight: 'bold' }}>1BOX</span>/MP-70
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(bCfg.font_qty * 1.333), textAlign: 'center', fontWeight: 'bold' }}>
+                                                    22
+                                                </td>
+                                            </tr>
+                                            {/* Row 3: SKU Bundling Ada Varian (Model & Varian Terpisah, 1BOX naik +2pt) */}
+                                            <tr>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '2px 4px', fontSize: Math.round(bCfg.font_jenis * 1.333), textAlign: 'center' }}>
+                                                    PULPEN
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 6px', fontSize: Math.round(bCfg.font_model * 1.333), textAlign: (bCfg.align_model || 'left') === 'center' ? 'center' : 'left' }}>
+                                                    <span style={{ fontSize: Math.round((bCfg.font_model + 2) * 1.333), fontWeight: 'bold' }}>1BOX</span>/GP-157
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(bCfg.font_varian * 1.333), textAlign: 'center' }}>
+                                                    BLACK
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(bCfg.font_qty * 1.333), textAlign: 'center', fontWeight: 'bold' }}>
+                                                    2
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div className="text-[10px] text-gray-400 mt-2 text-right">
+                                        Total Lebar: {bCfg.col_jenis + bCfg.col_model + bCfg.col_varian + bCfg.col_qty}pt (Auto-fit Presisi Pas ke Margin Kanan Label)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100 flex gap-3 items-start">
+                            <FiInfo className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-emerald-700 leading-relaxed">
+                                Format Bundling membagi semua data SKU ke kolom <b>JENIS</b>, <b>MODEL</b>, <b>VARIAN</b>, dan <b>QTY</b>. Jika SKU tidak memiliki varian warna (contoh: <code>PENCILCOLOR | CP-0133-SH12 | 12</code> atau <code>MECHANICALPENCIL | 1BOX/MP-70 | 22</code>), maka kolom <b>MODEL &amp; VARIAN otomatis digabung</b>. Khusus SKU yang terdaftar di <b>Database SKU Bundling</b>, teks kemasan (<b>1BOX, 1PACK, 1SLOP, 1DRUM</b>) pada kolom MODEL otomatis diperbesar <b>+2pt</b> agar jelas bagi picker gudang.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setBCfg(BUNDLING_DEFAULTS)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                                <FiRefreshCw className="w-4 h-4" />Reset Default
+                            </button>
+                            <button onClick={() => {
+                                    axios.post(`${API_CONFIG.BASE_URL}/settings/label-bundling-config`, bCfg)
+                                        .then(() => showToast?.('Pengaturan Format Bundling disimpan!'))
+                                        .catch(() => showToast?.('Gagal menyimpan (gunakan nilai default)'));
+                                }}
+                                className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-all shadow-md">
+                                <FiSave className="w-4 h-4" />Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ---- TAB: BUNDLING 2 SETTINGS (ISOLATED / EXPERIMENTAL) ---- */}
+            {activeTab === 'bundling_2' && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-6">
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+                            <h3 className="font-bold text-gray-800">⚙️ Pengaturan Format Bundling 2</h3>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase tracking-wide">
+                                Terisolasi / Bebas Rombak
+                            </span>
+                        </div>
+                        <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
+                            <p className="text-[11px] text-purple-700 leading-relaxed">
+                                <b>Format Bundling 2:</b> Konfigurasi dan logika ini terpisah 100% dari Format Bundling 1. Anda dapat bebas merevisi, merombak, atau mengubah pengaturan di sini tanpa khawatir merusak Format Bundling 1.
+                            </p>
+                        </div>
+                        <div className="space-y-5">
+                            <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">Lebar Kolom (pt)</p>
+                            {[
+                                { key: 'col_jenis' as const, label: 'Lebar JENIS', min: 40, max: 120 },
+                                { key: 'col_model' as const, label: 'Lebar MODEL', min: 60, max: 180 },
+                                { key: 'col_varian' as const, label: 'Lebar VARIAN', min: 30, max: 120 },
+                                { key: 'col_qty' as const, label: 'Lebar QTY', min: 25, max: 80 },
+                            ].map(s => (
+                                <div key={s.key} className="space-y-1.5">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-semibold text-gray-600">{s.label}</label>
+                                        <span className="text-xs font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-100">{b2Cfg[s.key]}pt</span>
+                                    </div>
+                                    <input type="range" min={s.min} max={s.max} step={0.5} value={b2Cfg[s.key]}
+                                        onChange={e => updateB2Cfg(s.key, parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                                    <div className="flex justify-between text-[10px] text-gray-400"><span>{s.min}pt</span><span>{s.max}pt</span></div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="space-y-5">
+                            <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Ukuran Font (pt)</p>
+                            {[
+                                { key: 'font_jenis' as const, label: 'Font JENIS' },
+                                { key: 'font_model' as const, label: 'Font MODEL' },
+                                { key: 'font_varian' as const, label: 'Font VARIAN' },
+                                { key: 'font_qty' as const, label: 'Font QTY' },
+                                { key: 'row_height' as const, label: 'Tinggi Baris Min' },
+                            ].map(s => (
+                                <div key={s.key} className="space-y-1.5">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-semibold text-gray-600">{s.label}</label>
+                                        <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">{b2Cfg[s.key]}pt</span>
+                                    </div>
+                                    <input type="range" min={6} max={s.key === 'row_height' ? 50 : 24} step={0.5} value={b2Cfg[s.key]}
+                                        onChange={e => updateB2Cfg(s.key, parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Pilihan Posisi Kolom MODEL: Kiri / Tengah */}
+                        <div className="space-y-2 pt-2 border-t border-gray-100">
+                            <label className="text-xs font-semibold text-gray-700">Posisi Kolom MODEL</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => updateB2Cfg('align_model', 'left')}
+                                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 ${
+                                        (b2Cfg.align_model || 'left') === 'left'
+                                            ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    ⬅️ Rata Kiri
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => updateB2Cfg('align_model', 'center')}
+                                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 ${
+                                        b2Cfg.align_model === 'center'
+                                            ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    ↔️ Rata Tengah
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400">Atur perataan teks pada data MODEL (Rata Kiri untuk kerapian nama SKU atau Rata Tengah).</p>
+                        </div>
+                    </div>
+                    {/* Live Preview Bundling 2 */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+                        <h3 className="font-bold text-gray-800 border-b border-gray-100 pb-3">👁 Live Preview — Format Bundling 2</h3>
+                        <div className="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-4 flex flex-col items-center justify-center min-h-[200px] overflow-auto">
+                            <div className="overflow-x-auto max-w-full pb-2">
+                                <div style={{ backgroundColor: 'white', padding: '10px 7px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} className="mx-auto border border-gray-200">
+                                    <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed',
+                                        width: Math.round((b2Cfg.col_jenis + b2Cfg.col_model + b2Cfg.col_varian + b2Cfg.col_qty) * (350/271.5)) }}>
+                                        <tbody>
+                                            {/* Baris 0: Header PIC Mandiri (Merger 4 Kolom) */}
+                                            <tr style={{ background: cfg.header_bg, color: cfg.header_color }}>
+                                                <th colSpan={4} style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '4px 6px', fontSize: 11, textAlign: 'center', fontWeight: 'bold' }}>
+                                                    PIC : APRILIA MAULIDA NINGRUM
+                                                </th>
+                                            </tr>
+                                            {/* Baris 1: Header Kolom */}
+                                            <tr style={{ background: cfg.header_bg, color: cfg.header_color }}>
+                                                <th style={{ width: Math.round(b2Cfg.col_jenis * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    JENIS
+                                                </th>
+                                                <th style={{ width: Math.round(b2Cfg.col_model * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    MODEL
+                                                </th>
+                                                <th style={{ width: Math.round(b2Cfg.col_varian * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    VARIAN
+                                                </th>
+                                                <th style={{ width: Math.round(b2Cfg.col_qty * (350/271.5)), border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: 11, textAlign: 'center' }}>
+                                                    QTY
+                                                </th>
+                                            </tr>
+                                            {/* Row 1: SKU Reguler (Non-Bundling) Tanpa Varian */}
+                                            <tr>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '2px 4px', fontSize: Math.round(b2Cfg.font_jenis * 1.333), textAlign: 'center', lineHeight: '1.15' }}>
+                                                    PENCIL<br />COLOR
+                                                </td>
+                                                <td colSpan={2} style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 6px', fontSize: Math.round(b2Cfg.font_model * 1.333), textAlign: (b2Cfg.align_model || 'left') === 'center' ? 'center' : 'left' }}>
+                                                    CP-0133-SH12
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(b2Cfg.font_qty * 1.333), textAlign: 'center', fontWeight: 'bold' }}>
+                                                    12
+                                                </td>
+                                            </tr>
+                                            {/* Row 2: SKU Bundling Tanpa Varian (JENIS 2 Baris: MECHANICAL / PENCIL) */}
+                                            <tr>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '2px 4px', fontSize: Math.round(b2Cfg.font_jenis * 1.333), textAlign: 'center', lineHeight: '1.15', fontWeight: 500 }}>
+                                                    MECHANICAL<br />PENCIL
+                                                </td>
+                                                <td colSpan={2} style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 6px', fontSize: Math.round(b2Cfg.font_model * 1.333), textAlign: (b2Cfg.align_model || 'left') === 'center' ? 'center' : 'left' }}>
+                                                    <span style={{ fontSize: Math.round((b2Cfg.font_model + 2) * 1.333), fontWeight: 'bold' }}>1BOX</span>/MP-70
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(b2Cfg.font_qty * 1.333), textAlign: 'center', fontWeight: 'bold' }}>
+                                                    22
+                                                </td>
+                                            </tr>
+                                            {/* Row 3: SKU Bundling Ada Varian (Model & Varian Terpisah, 1BOX naik +2pt) */}
+                                            <tr>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '2px 4px', fontSize: Math.round(b2Cfg.font_jenis * 1.333), textAlign: 'center' }}>
+                                                    PULPEN
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 6px', fontSize: Math.round(b2Cfg.font_model * 1.333), textAlign: (b2Cfg.align_model || 'left') === 'center' ? 'center' : 'left' }}>
+                                                    <span style={{ fontSize: Math.round((b2Cfg.font_model + 2) * 1.333), fontWeight: 'bold' }}>1BOX</span>/GP-157
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(b2Cfg.font_varian * 1.333), textAlign: 'center' }}>
+                                                    BLACK
+                                                </td>
+                                                <td style={{ border: `${Math.max(0.5, cfg.border_thickness)}px solid #111`, padding: '3px 4px', fontSize: Math.round(b2Cfg.font_qty * 1.333), textAlign: 'center', fontWeight: 'bold' }}>
+                                                    2
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div className="text-[10px] text-gray-400 mt-2 text-right">
+                                        Total Lebar: {b2Cfg.col_jenis + b2Cfg.col_model + b2Cfg.col_varian + b2Cfg.col_qty}pt (Auto-fit Presisi Pas ke Margin Kanan Label)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 flex gap-3 items-start">
+                            <FiInfo className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-purple-700 leading-relaxed">
+                                <b>Format Bundling 2:</b> Konfigurasi dan logika ini terpisah 100% dari Format Bundling 1. Kolom JENIS diformat menjadi 2 baris (misal: <code>MECHANICAL&lt;br/&gt;PENCIL</code>) dengan lebar kolom ramping (default 65pt), sehingga kolom MODEL &amp; VARIAN mendapatkan ruang yang lebih luas.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setB2Cfg(BUNDLING_2_DEFAULTS)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                                <FiRefreshCw className="w-4 h-4" />Reset Default
+                            </button>
+                            <button onClick={() => {
+                                    axios.post(`${API_CONFIG.BASE_URL}/settings/label-bundling-2-config`, b2Cfg)
+                                        .then(() => showToast?.('Pengaturan Format Bundling 2 disimpan!'))
+                                        .catch(() => showToast?.('Gagal menyimpan (gunakan nilai default)'));
+                                }}
+                                className="flex items-center gap-2 px-6 py-2 bg-purple-600 text-white rounded-xl font-semibold text-sm hover:bg-purple-700 transition-all shadow-md">
+                                <FiSave className="w-4 h-4" />Simpan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Save / Reset Bar */}
-            {activeTab !== 'format' && (
+            {activeTab !== 'format' && activeTab !== 'bundling' && activeTab !== 'bundling_2' && (
                 <div className="flex justify-between items-center bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
                     <button
                         onClick={handleReset}

@@ -8,6 +8,7 @@ interface DeleteConfirmationModalProps {
     title?: string;
     message?: string;
     itemName?: string;
+    count?: number;
 }
 
 const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({

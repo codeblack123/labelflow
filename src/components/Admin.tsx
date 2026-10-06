@@ -27,13 +27,14 @@ import AdminNetworkDiagnostics from './AdminNetworkDiagnostics';
 import AdminTableCleaner from './AdminTableCleaner';
 import AdminFeatureAudit from './AdminFeatureAudit';
 import AdminStaffManager from './AdminStaffManager';
+import AdminSkuBundling from './AdminSkuBundling';
 interface AdminProps {
     showToast?: (message: string) => void;
     user?: { role: string; username: string; assigned_warehouses?: string[] } | null;
     onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[], skipPinMenus?: string[]) => void;
 }
 
-type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip10k' | 'skuVip20k' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate';
+type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip10k' | 'skuVip20k' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate' | 'staffManager' | 'skuBundling';
 
 const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -81,6 +82,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                 { id: 'bulky', label: 'SKU Besar (Bulky)', icon: FiPackage },
                 { id: 'formatting', label: 'Format Packing List', icon: FiSettings },
                 { id: 'labelSettings', label: 'Format Label', icon: FiLayout },
+                { id: 'skuBundling', label: 'Database SKU Bundling', icon: FiPackage },
                 { id: 'barangKhusus', label: 'Data Barang Khusus', icon: FiDatabase },
                 { id: 'skuVip10k', label: 'SKU VIP (>10K)', icon: FiDatabase },
                 { id: 'skuVip20k', label: 'SKU VIP (>20K)', icon: FiDatabase },
@@ -90,6 +92,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
         {
             title: 'Manajemen Data',
             items: [
+                { id: 'sqlEditor', label: 'SQL Editor', icon: FiTerminal },
                 { id: 'staffManager', label: 'Manajemen Staf', icon: FiUsers },
                   { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
                 { id: 'dataManager', label: 'Kelola Data History', icon: FiTrash2 },
@@ -106,7 +109,6 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                 { id: 'runningText', label: 'Running Text Shift', icon: FiMessageSquare },
                 { id: 'notifications', label: 'Notifikasi Global', icon: FiBell },
                 { id: 'userManager', label: 'Manajemen User', icon: FiUser },
-                { id: 'sqlEditor', label: 'SQL Editor', icon: FiTerminal },
                 { id: 'networkDiagnostics', label: 'Network Diagnostics', icon: FiWifi },
                 { id: 'tableCleaner', label: 'Table Cleaner', icon: FiTrash2 },
             ]
@@ -349,6 +351,9 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                     <div className={activeView === 'labelSettings' ? 'block' : 'hidden'}>
                         <AdminLabelSettings showToast={showToast} />
                     </div>
+                    <div className={activeView === 'skuBundling' ? 'block' : 'hidden'}>
+                        <AdminSkuBundling showToast={showToast} />
+                    </div>
                     <div className={activeView === 'toolkitAccess' ? 'block' : 'hidden'}>
                         <AdminToolkitFeatures showToast={showToast} />
                     </div>
@@ -386,6 +391,10 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                         <SystemUpdateAdmin />
                     </div>
 
+                    <div className={activeView === 'sqlEditor' ? 'block min-h-[700px]' : 'hidden'}>
+                        <SqlEditor showToast={showToast} />
+                    </div>
+
                     {/* Dev Mode Only Views */}
                     {devMode && (
                         <>
@@ -397,9 +406,6 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                             </div>
                             <div className={activeView === 'userManager' ? 'block' : 'hidden'}>
                                 <AdminUserManager showToast={showToast} />
-                            </div>
-                            <div className={activeView === 'sqlEditor' ? 'block h-[600px]' : 'hidden'}>
-                                <SqlEditor showToast={showToast} />
                             </div>
                             <div className={activeView === 'tableCleaner' ? 'block' : 'hidden'}>
                                 <AdminTableCleaner showToast={showToast} />

@@ -213,6 +213,12 @@ const AdminUserManager: React.FC<AdminUserManagerProps> = ({ showToast }) => {
         }
     };
 
+    const confirmDelete = async () => {
+        if (!userToDelete) return;
+        await handleDelete(userToDelete.id, userToDelete.username);
+        setUserToDelete(null);
+    };
+
     const handleForceLogout = async (id: string, username: string) => {
         if (!confirm(`Yakin ingin mengeluarkan user "${username}" secara paksa?`)) return;
 
