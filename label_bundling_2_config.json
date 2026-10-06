@@ -1,12 +1,11 @@
 {
-  "col_jenis": 65.0,
-  "col_model": 113.0,
-  "col_varian": 55.5,
-  "col_qty": 38.0,
-  "font_jenis": 9.0,
-  "font_model": 8.0,
-  "font_varian": 8.0,
-  "font_qty": 13.5,
-  "row_height": 20.0,
-  "align_model": "left"
+  "col_sku": 230.0,
+  "col_qty": 40.0,
+  "font_rak": 9.5,
+  "font_sku": 9.5,
+  "font_qty": 15.0,
+  "font_header": 10.0,
+  "border_thickness": 0.5,
+  "highlight_qty_box": true,
+  "enable_badge": true
 }

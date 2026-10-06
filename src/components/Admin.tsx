@@ -97,9 +97,9 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                   { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
                 { id: 'dataManager', label: 'Kelola Data History', icon: FiTrash2 },
                 { id: 'toolkitAccess', label: 'Kontrol Akses Toolkit', icon: FiLock },
+                { id: 'systemUpdate', label: 'Manajemen Update Sistem', icon: FiUploadCloud },
                 ...(user?.role === 'developer' ? [
                     { id: 'menuSettings', label: 'Pengaturan Menu', icon: FiLayout },
-                    { id: 'systemUpdate', label: 'Manajemen Update Sistem', icon: FiUploadCloud }
                 ] : [])
             ]
         },

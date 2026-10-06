@@ -644,15 +644,22 @@ const App: React.FC = () => {
     } | null>(null);
     const [isAutoUpdatingSuccess, setIsAutoUpdatingSuccess] = useState(false);
 
-    // Helper to compare versions (e.g. v2.5.0 >= v1.0.5)
-    const isVersionGte = (localVer?: string, targetVer?: string): boolean => {
+    // Helper to check if local version matches or is newer than target version
+    const isVersionMatchingOrNewer = (localVer?: string, targetVer?: string): boolean => {
         if (!localVer || !targetVer) return false;
-        if (localVer.trim().toLowerCase() === targetVer.trim().toLowerCase()) return true;
-        const cleanL = localVer.toLowerCase().replace(/[^0-9.]/g, '');
-        const cleanT = targetVer.toLowerCase().replace(/[^0-9.]/g, '');
+        const normL = localVer.trim().toLowerCase();
+        const normT = targetVer.trim().toLowerCase();
+        if (normL === normT) return true;
+        
+        const cleanL = normL.replace(/[^0-9.]/g, '');
+        const cleanT = normT.replace(/[^0-9.]/g, '');
         if (!cleanL || !cleanT) return false;
         const partsL = cleanL.split('.').map(n => parseInt(n, 10) || 0);
         const partsT = cleanT.split('.').map(n => parseInt(n, 10) || 0);
+        
+        // If major versions don't match (e.g. 2 vs 1), do NOT treat as newer (different versioning scheme)
+        if (partsL[0] !== partsT[0]) return false;
+        
         for (let i = 0; i < Math.max(partsL.length, partsT.length); i++) {
             const valL = partsL[i] || 0;
             const valT = partsT[i] || 0;
@@ -711,15 +718,9 @@ const App: React.FC = () => {
                                 is_old: false
                             });
                             
-                            // Check if version is equal or newer (e.g. v2.5.0 >= v1.0.5)
-                            if (localInfo.version_code && data.version_code && isVersionGte(localInfo.version_code, data.version_code)) {
+                            // Check if version is equal or newer (within same major version scheme)
+                            if (localInfo.version_code && data.version_code && isVersionMatchingOrNewer(localInfo.version_code, data.version_code)) {
                                 isLocalAlreadyUpdated = true;
-                            } else if (localInfo.file_mtime && data.updated_at) {
-                                const localTime = new Date(localInfo.file_mtime).getTime();
-                                const updateTime = new Date(data.updated_at).getTime();
-                                if (localTime >= updateTime - 60000) {
-                                    isLocalAlreadyUpdated = true;
-                                }
                             }
                         } else {
                             // Endpoint /backend-version does not exist yet -> Running old main.py!

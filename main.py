@@ -53,7 +53,7 @@ def register_fonts():
 
 register_fonts()
 
-BACKEND_VERSION = "v2.5.0"
+BACKEND_VERSION = "v1.0.7"
 
 def get_main_file_info():
     try:
@@ -2791,27 +2791,44 @@ async def save_label_bundling_config(item: LabelBundlingConfigItem):
 LABEL_BUNDLING_2_CONFIG_FILE = "label_bundling_2_config.json"
 
 class LabelBundling2ConfigItem(BaseModel):
-    col_jenis: float = 65.0
-    col_model: float = 113.0
-    col_varian: float = 55.5
-    col_qty: float = 38.0
-    font_jenis: float = 9.0
-    font_model: float = 8.0
-    font_varian: float = 8.0
-    font_qty: float = 13.5
-    row_height: float = 20.0
+    # Kolom & font Format Bundling Pro (Layout Fokus Visual Gudang)
+    col_sku: float = 230.0
+    col_qty: float = 40.0
+    font_rak: float = 9.5
+    font_sku: float = 9.5
+    font_qty: float = 15.0
+    font_header: float = 10.0
+    border_thickness: float = 0.5
+    highlight_qty_box: bool = True
+    enable_badge: bool = True
+
+    # Backward compatibility fields
+    ext_col_rak: Optional[float] = 80.0
+    ext_col_msku: Optional[float] = 150.0
+    ext_col_qty: Optional[float] = 50.0
+    ext_font_rak: Optional[float] = 10.0
+    ext_font_msku: Optional[float] = 8.0
+    ext_font_qty: Optional[float] = 13.5
+    ext_row_height: Optional[float] = 25.0
+    header_bg: Optional[str] = "#ffffff"
+    header_color: Optional[str] = "#000000"
+    col_jenis: Optional[float] = 65.0
+    col_model: Optional[float] = 113.0
+    col_varian: Optional[float] = 55.5
+    row_height: Optional[float] = 20.0
     align_model: Optional[str] = 'left'
 
 @app.get("/settings/label-bundling-2-config")
 async def get_label_bundling_2_config():
+    defaults = LabelBundling2ConfigItem().dict()
     try:
         data = await supabase_fetch("GET", "app_settings?key=eq.label_bundling_2_config")
         if data and len(data) > 0:
             import json
             val = data[0].get("value")
-            if isinstance(val, str):
-                return json.loads(val)
-            return val
+            loaded = json.loads(val) if isinstance(val, str) else val
+            if isinstance(loaded, dict):
+                return {**defaults, **loaded}
     except Exception as e:
         print(f"[LabelBundling2Config] Supabase load error: {e}")
         
@@ -2819,16 +2836,13 @@ async def get_label_bundling_2_config():
         try:
             import json
             with open(LABEL_BUNDLING_2_CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    return {**defaults, **loaded}
         except Exception as e:
             print(f"[LabelBundling2Config] Local file load error: {e}")
             
-    # Fallback ke config bundling 1 bila ada, atau default
-    try:
-        b1_cfg = await get_label_bundling_config()
-        return b1_cfg
-    except:
-        return LabelBundling2ConfigItem().dict()
+    return defaults
 
 @app.post("/settings/label-bundling-2-config")
 async def save_label_bundling_2_config(item: LabelBundling2ConfigItem):
@@ -5171,97 +5185,252 @@ def get_bundling_col_widths(b_cfg=None, W_pts=283.46):
 
 
 def get_bundling_2_col_widths(b_cfg=None, W_pts=283.46):
-    """Kembalikan list 4 lebar kolom untuk Format Bundling 2: [JENIS, MODEL, VARIAN, QTY]."""
-    b_cfg = b_cfg or {}
-    raw_widths = [
-        float(b_cfg.get('col_jenis', 65.0)),
-        float(b_cfg.get('col_model', 113.0)),
-        float(b_cfg.get('col_varian', 55.5)),
-        float(b_cfg.get('col_qty', 38.0)),
-    ]
-    # Margin kiri = 7.0 pt, margin kanan = 7.0 pt -> total target lebar = W_pts - 14.0 pt
-    if W_pts and W_pts > 0:
-        target_total_width = round(W_pts - 14.0, 1)
-    else:
-        target_total_width = 271.5
-
-    cur_total = sum(raw_widths)
-    if abs(cur_total - target_total_width) > 0.5:
-        scale_ratio = target_total_width / cur_total
-        col_widths = [round(w * scale_ratio, 1) for w in raw_widths]
-        diff = round(target_total_width - sum(col_widths), 1)
-        col_widths[1] = round(col_widths[1] + diff, 1)
-    else:
-        col_widths = raw_widths
-    return col_widths
+    """Kembalikan list 4 lebar kolom untuk Format Bundling Pro: [JENIS, MODEL, VARIAN, QTY]. Identik 100% dengan get_bundling_col_widths."""
+    return get_bundling_col_widths(b_cfg=b_cfg, W_pts=W_pts)
 
 def create_table_bundling_2(data, row_heights=None, span_cmds=None, label_cfg=None, bundling_cfg=None, W_pts=283.46):
-    """Buat tabel ReportLab khusus Format Bundling 2 (Bisa direvisi/dirombak bebas tanpa mempengaruhi Bundling 1)."""
-    cfg = label_cfg or {}
-    b_cfg = bundling_cfg or {}
-    col_widths = get_bundling_2_col_widths(b_cfg, W_pts=W_pts)
-    font_size = float(b_cfg.get('font_jenis', 9.0))
-    border = float(cfg.get('border_thickness', 0.5))
-    hdr_bg_hex   = str(cfg.get('header_bg',    '#000000')).lstrip('#')
-    hdr_txt_hex  = str(cfg.get('header_color', '#ffffff')).lstrip('#')
+    """Buat tabel ReportLab khusus Format Bundling Pro (100% identik dengan Format Bundling 1)."""
+    return create_table(data, row_heights=row_heights, span_cmds=span_cmds, label_cfg=label_cfg, is_bundling=True, bundling_cfg=bundling_cfg, W_pts=W_pts)
+
+def extract_bundling_pro_badge(sku_text: str, target_satuan: str = None) -> Optional[str]:
+    """Ekstrak teks badge 'CEK WARNA: ...' atau 'CEK KODE: ...' untuk fokus mata picker."""
     try:
-        hdr_bg  = colors.HexColor(f'#{hdr_bg_hex}')
-        hdr_txt = colors.HexColor(f'#{hdr_txt_hex}')
+        text_to_check = (target_satuan or sku_text or '').strip().upper()
+        # Periksa varian warna
+        for part in re.split(r'[/_\-\s]', text_to_check):
+            if part in KNOWN_SKU_COLORS:
+                return f"CEK WARNA: {part}"
+        
+        # Jika ada target_satuan dari Database SKU Bundling
+        if target_satuan and str(target_satuan).strip():
+            ts_clean = str(target_satuan).strip().upper()
+            for prefix in ['1BOX/', '1PACK/', '1SLOP/', '1DRUM/', '1SET/', '1DZN/', '1LBR/', '1PC/', '1PCS/']:
+                if ts_clean.startswith(prefix):
+                    ts_clean = ts_clean[len(prefix):]
+            if len(ts_clean) <= 22:
+                return f"CEK KODE: {ts_clean}"
+
+        # Fallback parsing dari sku_text
+        jenis, model, varian = parse_sku_bundling_fields(sku_text)
+        v_upper = varian.strip().upper()
+        if v_upper in KNOWN_SKU_COLORS:
+            return f"CEK WARNA: {v_upper}"
+        if model and model != "-":
+            m_clean = model.strip().upper()
+            for prefix in ['1BOX/', '1PACK/', '1SLOP/', '1DRUM/', '1SET/', '1DZN/', '1LBR/', '1PC/', '1PCS/']:
+                if m_clean.startswith(prefix):
+                    m_clean = m_clean[len(prefix):]
+            if re.search(r'\d', m_clean) and len(m_clean) <= 18:
+                return f"CEK KODE: {m_clean}"
+        if v_upper and v_upper != "-" and len(v_upper) <= 18:
+            return f"CEK KODE: {v_upper}"
     except Exception:
-        hdr_bg  = colors.black
-        hdr_txt = colors.white
+        pass
+    return None
 
-    if row_heights is None:
-        row_heights = [max(18, font_size * 2.5)] * len(data)
+def generate_table_data_bundling_pro(chunk, rak_map, label_cfg=None, picker_name=None, bundling_map=None, bundling_2_cfg=None, W_pts=283.46):
+    """
+    Generate data tabel khusus Format Bundling Pro (Fokus Visual Gudang):
+    - Header PIC di tengah tanpa ringkasan baris/pcs.
+    - Ukuran font Rak & ID dan SKU sama, diberi jeda vertikal dan garis putus-putus sepanjang teks Rak & ID.
+    - Cek Kode HANYA ditampilkan jika SKU ada di menu Database SKU Bundling (bundling_map).
+    - Cek Kode berbentuk Outlined Box (bingkai kotak 1.5pt, latar putih) aman untuk printhead printer thermal.
+    - Lebar tabel responsif (W_pts - 14.0pt) simetris margin 7.0pt kiri & kanan agar border QTY tidak terpotong.
+    """
+    from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.graphics.shapes import Drawing, Line
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    import html
 
-    # Deteksi apakah baris 0 adalah baris PIC (merger 4 kolom)
-    has_pic_header = bool(span_cmds and any(cmd[0] == 'SPAN' and cmd[1] == (0, 0) and cmd[2] == (3, 0) for cmd in span_cmds))
-    hdr_end_row = 1 if has_pic_header else 0
-    data_start_row = hdr_end_row + 1
+    b_cfg = bundling_2_cfg or {}
+    f_rak = float(b_cfg.get('font_rak', 9.5))
+    f_sku = float(b_cfg.get('font_sku', 9.5))
+    f_qty = float(b_cfg.get('font_qty', 15.0))
+    f_hdr = float(b_cfg.get('font_header', 10.0))
+    show_box = bool(b_cfg.get('highlight_qty_box', True))
+    enable_badge = bool(b_cfg.get('enable_badge', True))
+    
+    # Lebar area kerja tabel dengan margin simetris 7.0pt kiri & kanan
+    usable_w = (W_pts - 14.0) if (W_pts and W_pts > 0) else 269.46
+    qty_col_w = float(b_cfg.get('col_qty', 40.0))
+    left_col_w = usable_w - qty_col_w
 
-    align_m = str(b_cfg.get('align_model', 'left')).lower().strip()
-    m_align = 'CENTER' if align_m == 'center' else 'LEFT'
+    styles = getSampleStyleSheet()
+    style_normal = styles['Normal']
+    style_badge_box = ParagraphStyle('B2BadgeBox', parent=styles['Normal'], fontSize=7.5, leading=9, textColor=colors.black, fontName='Helvetica-Bold')
 
-    t = Table(data, colWidths=col_widths, rowHeights=row_heights)
-    hpad = 3
-    style = [
-        ('GRID',        (0, 0), (-1, -1), border, colors.black),
-        ('FONTSIZE',    (0, 0), (-1, -1), font_size),
-        ('VALIGN',      (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTNAME',    (0, 0), (-1, hdr_end_row), 'Helvetica-Bold'),
-        ('FONTSIZE',    (0, 0), (-1, hdr_end_row), max(9.0, font_size * 1.1)), 
-        ('LEFTPADDING', (0, 0), (-1, -1), hpad),
-        ('RIGHTPADDING',(0, 0), (-1, -1), hpad),
-        ('ALIGN',       (-1, 0), (-1, -1), 'CENTER'),
-        ('ALIGN',       (0, 0),  (0,  -1), 'CENTER'),
-        ('ALIGN',       (1, data_start_row), (1, -1), m_align),  # MODEL data sesuai align_model
-        ('ALIGN',       (2, 0),  (2,  -1), 'CENTER'),          # VARIAN: RATA TENGAH
-        ('TEXTCOLOR',   (0, 0), (-1, hdr_end_row), hdr_txt),
-        ('TEXTCOLOR',   (0, data_start_row), (-1, -1), colors.black),
+    hdr_text = f"PIC : {str(picker_name).strip().upper()}" if picker_name and str(picker_name).strip() else "PIC : -"
+    
+    table_data = [[hdr_text, '']]
+    row_heights = [18]
+    span_cmds = [
+        ('SPAN', (0,0), (1,0)),
+        ('ALIGN', (0,0), (1,0), 'CENTER'),
+        ('VALIGN', (0,0), (1,0), 'MIDDLE'),
+        ('FONTNAME', (0,0), (1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (1,0), f_hdr),
     ]
 
-    if hdr_bg_hex.lower() not in ['ffffff', 'fff', 'white']:
-        style.append(('BACKGROUND', (0, 0), (-1, hdr_end_row), hdr_bg))
+    b_map = bundling_map or {}
 
-    f_jenis  = get_pdf_font_name('Helvetica', False)
-    f_model  = get_pdf_font_name('Helvetica', False)
-    f_varian = get_pdf_font_name('Helvetica', False)
-    f_qty    = get_pdf_font_name('Helvetica', True)
-    style.append(('FONTNAME', (0, data_start_row), (0, -1), f_jenis))
-    style.append(('FONTNAME', (1, data_start_row), (1, -1), f_model))
-    style.append(('FONTNAME', (2, data_start_row), (2, -1), f_varian))
-    style.append(('FONTNAME', (3, data_start_row), (3, -1), f_qty))
+    for idx, item in enumerate(chunk, start=1):
+        sku_raw = item['msku'].strip()
+        sku_upper = sku_raw.upper()
+        
+        # Lokasi Rak
+        r_info = rak_map.get(sku_upper, {"rak": "", "id": ""})
+        id_val = r_info.get('id', '')
+        rak_val = r_info.get('rak', '')
+        loc_str = id_val if id_val else (rak_val or "-")
+        if loc_str != "-" and not loc_str.upper().startswith("RAK"):
+            loc_display = f"RAK {loc_str}"
+        else:
+            loc_display = loc_str
 
+        # Teks Rak & ID
+        p_rak = Paragraph(
+            f'<font size="7.5" color="#444444">RAK &amp; ID : </font><b><font size="{f_rak}">{html.escape(loc_display)}</font></b>',
+            style_normal
+        )
+
+        # Garis putus-putus sepanjang teks Rak & ID
+        rak_full_text = f"RAK & ID : {loc_display}"
+        w_rak_line = min(stringWidth(rak_full_text, 'Helvetica-Bold', f_rak) + 6.0, left_col_w - 12.0)
+        d_line = Drawing(w_rak_line, 5)
+        d_line.add(Line(0, 2.5, w_rak_line, 2.5, strokeDashArray=[2.5, 2], strokeWidth=0.8, strokeColor=colors.HexColor('#666666')))
+
+        # Teks SKU (ukuran sama dengan Rak & ID, dicetak bold)
+        p_sku = Paragraph(
+            f'<b><font size="{f_sku}">{html.escape(sku_raw)}</font></b>',
+            style_normal
+        )
+
+        flowables = [p_rak, Spacer(1, 1), d_line, Spacer(1, 3), p_sku]
+        rh = max(38.0, f_rak + f_sku + 16.0)
+
+        # Cek Kode HANYA jika ada di menu Database SKU Bundling!
+        is_in_bundling_db = (sku_upper in b_map) if b_map else False
+        badge_str = None
+        if enable_badge and is_in_bundling_db:
+            target_satuan = b_map.get(sku_upper, '')
+            badge_str = extract_bundling_pro_badge(sku_raw, target_satuan=target_satuan)
+            if not badge_str and target_satuan:
+                badge_str = f"CEK KODE: {target_satuan}"
+
+        if badge_str:
+            t_badge = Table([[Paragraph(f'<b>{html.escape(badge_str)}</b>', style_badge_box)]], colWidths=[left_col_w - 16.0], rowHeights=[14])
+            t_badge.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 5),
+                ('RIGHTPADDING', (0,0), (-1,-1), 5),
+                ('TOPPADDING', (0,0), (-1,-1), 1),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+            ]))
+            flowables.extend([Spacer(1, 4), t_badge])
+            rh += 18.0
+
+        # Kolom QTY
+        qty_num = int(item.get('jumlah', 1))
+        if qty_num > 1 and show_box:
+            p_qty = Paragraph(f'<b><font size="{f_qty - 1.0}">{qty_num}</font></b>', ParagraphStyle(f'B2QtyBox_{idx}', alignment=1))
+            qty_cell = Table([[p_qty]], colWidths=[24], rowHeights=[24])
+            qty_cell.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 2, colors.black),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+            ]))
+        else:
+            qty_cell = Paragraph(f'<b><font size="{f_qty}">{qty_num}</font></b>', ParagraphStyle(f'B2QtyNorm_{idx}', alignment=1))
+
+        table_data.append([flowables, qty_cell])
+        row_heights.append(rh)
+
+    return {
+        'table_data': table_data,
+        'row_heights': row_heights,
+        'span_cmds': span_cmds,
+        'total_rows': len(table_data),
+    }
+
+def create_table_bundling_pro(data, row_heights=None, span_cmds=None, label_cfg=None, bundling_2_cfg=None, W_pts=283.46):
+    """Buat Tabel ReportLab untuk Format Bundling Pro (2 Kolom: SKU/Rak dan QTY)."""
+    from reportlab.platypus import Table, TableStyle
+    from reportlab.lib import colors
+
+    b_cfg = bundling_2_cfg or {}
+    usable_w = (W_pts - 14.0) if (W_pts and W_pts > 0) else 269.46
+    qty_col_w = float(b_cfg.get('col_qty', 40.0))
+    left_col_w = usable_w - qty_col_w
+    border = float(b_cfg.get('border_thickness', 0.5))
+
+    t = Table(data, colWidths=[left_col_w, qty_col_w], rowHeights=row_heights)
+    style = [
+        ('GRID', (0,0), (-1,-1), border, colors.black),
+        ('VALIGN', (0,1), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,1), (1,-1), 'CENTER'),
+        ('VALIGN', (1,1), (1,-1), 'MIDDLE'),
+        ('LEFTPADDING', (0,1), (0,-1), 5),
+        ('RIGHTPADDING', (0,1), (0,-1), 4),
+        ('TOPPADDING', (0,1), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,1), (-1,-1), 4),
+        ('LEFTPADDING', (1,1), (1,-1), 2),
+        ('RIGHTPADDING', (1,1), (1,-1), 2),
+    ]
     if span_cmds:
         style.extend(span_cmds)
-
     t.setStyle(TableStyle(style))
     return t
 
+def calc_items_for_rows_bundling_pro(items, rak_map, available_height, label_cfg, W_pts, force_first=False, bundling_2_cfg=None, picker_name=None, bundling_map=None):
+    """Hitung item yang muat untuk Format Bundling Pro."""
+    b_cfg = bundling_2_cfg or {}
+    f_rak = float(b_cfg.get('font_rak', 9.5))
+    f_sku = float(b_cfg.get('font_sku', 9.5))
+    enable_badge = bool(b_cfg.get('enable_badge', True))
+    b_map = bundling_map or {}
+
+    hdr_h = 18.0
+    accumulated_h = hdr_h
+    fitted_items = []
+    rest_items = []
+
+    for idx, item in enumerate(items):
+        sku_raw = item['msku'].strip()
+        sku_upper = sku_raw.upper()
+        is_in_bundling_db = (sku_upper in b_map) if b_map else False
+        badge_str = None
+        if enable_badge and is_in_bundling_db:
+            target_satuan = b_map.get(sku_upper, '')
+            badge_str = extract_bundling_pro_badge(sku_raw, target_satuan=target_satuan)
+            if not badge_str and target_satuan:
+                badge_str = f"CEK KODE: {target_satuan}"
+
+        item_h = max(38.0, f_rak + f_sku + 16.0) + (18.0 if badge_str else 0.0)
+
+        if idx == 0 and force_first:
+            accumulated_h += item_h
+            fitted_items.append(item)
+            continue
+
+        if accumulated_h + item_h <= available_height:
+            accumulated_h += item_h
+            fitted_items.append(item)
+        else:
+            rest_items = items[idx:]
+            break
+
+    return fitted_items, rest_items
 def create_table(data, row_heights=None, span_cmds=None, label_cfg=None, is_bundling=False, bundling_cfg=None, W_pts=283.46, is_bundling_2=False, bundling_2_cfg=None):
-    """Buat tabel ReportLab untuk MSKU / Extended / Bundling."""
+    """Buat tabel ReportLab untuk MSKU / Extended / Bundling / Bundling Pro."""
     if is_bundling_2:
-        return create_table_bundling_2(data, row_heights=row_heights, span_cmds=span_cmds, label_cfg=label_cfg, bundling_cfg=bundling_2_cfg, W_pts=W_pts)
+        return create_table_bundling_pro(data, row_heights=row_heights, span_cmds=span_cmds, label_cfg=label_cfg, bundling_2_cfg=bundling_2_cfg, W_pts=W_pts)
     cfg = label_cfg or {}
     b_cfg = bundling_cfg or {}
     num_cols = len(data[0]) if data else 2
@@ -5402,237 +5571,8 @@ def format_bundling_2_jenis(jenis: str, font_name: str, font_size: float, usable
 
 
 def generate_table_data_bundling_2(chunk, is_extended, rak_map, label_cfg=None, picker_name=None, bundling_map=None, bundling_cfg=None, W_pts=283.46):
-    """
-    Generate data tabel khusus Format Bundling 2.
-    Identik dengan Format Bundling 1 pada awalnya, namun terisolasi penuh sehingga bisa dirombak / direvisi tanpa menyentuh Bundling 1.
-    """
-    cfg = label_cfg or {}
-    b_cfg = bundling_cfg or {}
-    b_map = bundling_map or {}
-
-    f_jenis = float(b_cfg.get('font_jenis', 9.0))
-    f_model = float(b_cfg.get('font_model', 8.0))
-    f_varian = float(b_cfg.get('font_varian', 8.0))
-    f_qty = float(b_cfg.get('font_qty', 13.5))
-    max_body_font = max(f_jenis, f_model, f_varian)
-    row_height = max(float(b_cfg.get('row_height', 20.0)), max_body_font * 2.0, f_qty + 4.0)
-
-    col_widths = get_bundling_2_col_widths(b_cfg, W_pts=W_pts)
-    col_jenis_w = col_widths[0]
-    col_model_w = col_widths[1]
-    col_varian_w = col_widths[2]
-    col_qty_w = col_widths[3]
-
-    try:
-        from reportlab.lib import colors
-        hdr_txt_hex = str(cfg.get('header_color', '#ffffff')).lstrip('#')
-        hdr_txt = colors.HexColor(f'#{hdr_txt_hex}')
-    except Exception:
-        from reportlab.lib import colors
-        hdr_txt = colors.white
-
-    # 1. Header Kolom JENIS
-    hdr_style_jenis = ParagraphStyle(
-        'hdr_b2_para_jenis',
-        fontSize=max(8.5, min(9.5, f_jenis * 1.05)),
-        fontName='Helvetica-Bold',
-        alignment=1,
-        leading=max(12, round(f_jenis * 1.3)),
-        textColor=hdr_txt
-    )
-    jenis_header_para = Paragraph('JENIS', hdr_style_jenis)
-
-    # 2. Header Kolom MODEL (Murni MODEL, bersih dan leluasa)
-    model_hdr_style = ParagraphStyle(
-        'model_b2_hdr_para',
-        fontSize=max(8.5, min(9.5, f_model * 1.05)),
-        fontName='Helvetica-Bold',
-        alignment=1,
-        leading=max(12, round(f_model * 1.3)),
-        textColor=hdr_txt
-    )
-    model_header_para = Paragraph('MODEL', model_hdr_style)
-
-    # 3. Header Kolom VARIAN
-    hdr_style_varian = ParagraphStyle(
-        'varian_b2_hdr_para',
-        fontSize=max(8.0, min(8.5, f_varian * 1.05)),
-        fontName='Helvetica-Bold',
-        alignment=1,
-        leading=max(11, round(f_varian * 1.3)),
-        textColor=hdr_txt
-    )
-    varian_header_para = Paragraph('VARIAN', hdr_style_varian)
-
-    hdr_w_j, hdr_h_j = jenis_header_para.wrap(col_jenis_w - 6, 9999)
-    hdr_w_m, hdr_h_m = model_header_para.wrap(col_model_w - 6, 9999)
-    hdr_w_v, hdr_h_v = varian_header_para.wrap(col_varian_w - 6, 9999)
-    col_hdr_h = max(row_height, hdr_h_j + 6, hdr_h_m + 6, hdr_h_v + 6)
-
-    table_data = []
-    row_heights = []
-    span_cmds = []
-
-    has_pic = bool(picker_name and str(picker_name).strip())
-    clean_pic = str(picker_name).strip().upper() if has_pic else ""
-
-    if has_pic:
-        # Baris 0: Header PIC Mandiri (Merger 4 Kolom)
-        pic_fs = max(9.0, min(10.5, f_model * 1.2))
-        total_tbl_w = sum(col_widths)
-        pic_hdr_style = ParagraphStyle(
-            'pic_b2_hdr_para',
-            fontSize=pic_fs,
-            fontName='Helvetica-Bold',
-            alignment=1,
-            leading=max(12, round(pic_fs * 1.3)),
-            textColor=hdr_txt
-        )
-        pic_header_para = Paragraph(f"<b>PIC : {clean_pic}</b>", pic_hdr_style)
-        _, pic_h = pic_header_para.wrap(total_tbl_w - 12.0, 9999)
-        pic_row_h = max(row_height - 2.0, pic_h + 6.0)
-
-        table_data.append([pic_header_para, '', '', ''])
-        row_heights.append(pic_row_h)
-        span_cmds.append(('SPAN', (0, 0), (3, 0)))
-        span_cmds.append(('ALIGN', (0, 0), (3, 0), 'CENTER'))
-
-    # Baris Header Kolom: JENIS | MODEL | VARIAN | QTY
-    table_data.append([jenis_header_para, model_header_para, varian_header_para, 'QTY'])
-    row_heights.append(col_hdr_h)
-
-    hdr_rows_count = len(table_data)
-
-    align_m = str(b_cfg.get('align_model', 'left')).lower().strip()
-    is_center = (align_m == 'center')
-    m_align_code = 1 if is_center else 0
-    m_align_str = 'CENTER' if is_center else 'LEFT'
-    m_indent = 0 if is_center else 4
-
-    span_cmds.extend([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTSIZE', (0, hdr_rows_count), (0, -1), f_jenis),
-        ('FONTSIZE', (1, hdr_rows_count), (1, -1), f_model),
-        ('FONTSIZE', (2, hdr_rows_count), (2, -1), f_varian),
-        ('FONTSIZE', (3, hdr_rows_count), (3, -1), f_qty),
-        ('ALIGN', (1, hdr_rows_count), (1, -1), m_align_str),
-    ])
-
-    model_para_style = ParagraphStyle(
-        'model_b2_para',
-        fontSize=f_model,
-        leading=max(12, round(f_model * 1.5)),
-        fontName='Helvetica',
-        alignment=m_align_code,
-        leftIndent=m_indent, rightIndent=2, spaceAfter=0, spaceBefore=0
-    )
-    jenis_para_style = ParagraphStyle(
-        'jenis_b2_para',
-        fontSize=f_jenis,
-        leading=max(12, round(f_jenis * 1.5)),
-        fontName='Helvetica',
-        alignment=1, # 1 = CENTER (Rata Tengah)
-        leftIndent=0, rightIndent=0, spaceAfter=0, spaceBefore=0
-    )
-    varian_para_style = ParagraphStyle(
-        'varian_b2_para',
-        fontSize=f_varian,
-        leading=max(10, round(f_varian * 1.3)),
-        fontName='Helvetica',
-        alignment=1, # 1 = CENTER (Rata Tengah)
-        leftIndent=0, rightIndent=0, spaceAfter=0, spaceBefore=0
-    )
-    non_bund_style = ParagraphStyle(
-        'non_bund_b2_msku',
-        fontSize=f_model,
-        leading=max(12, round(f_model * 1.5)),
-        fontName='Helvetica-Bold',
-        alignment=m_align_code,
-        leftIndent=m_indent,
-        rightIndent=2,
-        spaceAfter=0,
-        spaceBefore=0
-    )
-
-    total_span_w = (col_jenis_w + col_model_w + col_varian_w) - 6.0
-
-    for item in chunk:
-        raw_sku = item['msku'].strip()
-        row_idx = len(table_data)
-
-        if '-' in raw_sku:
-            jenis, model, varian = parse_sku_bundling_fields(raw_sku)
-            has_varian = bool(varian and str(varian).strip() not in ('-', ''))
-
-            clean_sku_upper = raw_sku.strip().upper()
-            is_in_bundling_db = bool(b_map and (clean_sku_upper in b_map or f"{jenis}-{model}".strip().upper() in b_map))
-
-            usable_j = col_jenis_w - 6.0
-            formatted_jenis, actual_f_j = format_bundling_2_jenis(jenis, 'Helvetica', f_jenis, usable_j)
-            j_style = ParagraphStyle(
-                f'j_b2_{actual_f_j}',
-                fontSize=actual_f_j,
-                leading=max(9.5, round(actual_f_j * 1.15)),
-                fontName='Helvetica',
-                alignment=1
-            )
-            jenis_para = Paragraph(formatted_jenis, j_style)
-            jw, jh = jenis_para.wrap(usable_j, 9999)
-
-            model_varian_span_w = (col_model_w + col_varian_w) - 6.0
-
-            if not has_varian:
-                formatted_model = format_msku_for_wrapping(model, 'Helvetica', f_model, model_varian_span_w)
-                if is_in_bundling_db:
-                    formatted_model = enlarge_bundling_pkg_prefix(formatted_model, f_model)
-
-                model_para = Paragraph(formatted_model, model_para_style)
-                para_w, para_h = model_para.wrap(model_varian_span_w, 9999)
-                actual_rh = max(row_height, para_h + 4, jh + 4)
-
-                table_data.append([jenis_para, model_para, '', str(item['jumlah'])])
-                row_heights.append(actual_rh)
-                span_cmds.append(('SPAN', (1, row_idx), (2, row_idx)))
-                span_cmds.append(('ALIGN', (1, row_idx), (2, row_idx), m_align_str))
-                if not is_center:
-                    span_cmds.append(('LEFTPADDING', (1, row_idx), (2, row_idx), 4))
-            else:
-                formatted_model = format_msku_for_wrapping(model, 'Helvetica', f_model, col_model_w - 6.0)
-                if is_in_bundling_db:
-                    formatted_model = enlarge_bundling_pkg_prefix(formatted_model, f_model)
-
-                model_para = Paragraph(formatted_model, model_para_style)
-                para_w, para_h = model_para.wrap(col_model_w - 6.0, 9999)
-
-                formatted_varian = format_msku_for_wrapping(varian, 'Helvetica', f_varian, col_varian_w - 6.0)
-                varian_para = Paragraph(formatted_varian, varian_para_style)
-                _, vh = varian_para.wrap(col_varian_w - 6.0, 9999)
-                actual_rh = max(row_height, para_h + 4, jh + 4, vh + 4)
-
-                table_data.append([jenis_para, model_para, varian_para, str(item['jumlah'])])
-                row_heights.append(actual_rh)
-                span_cmds.append(('ALIGN', (1, row_idx), (1, row_idx), m_align_str))
-                if not is_center:
-                    span_cmds.append(('LEFTPADDING', (1, row_idx), (1, row_idx), 4))
-        else:
-            formatted_sku = format_msku_for_wrapping(raw_sku, 'Helvetica', f_model, total_span_w)
-            sku_para = Paragraph(formatted_sku, non_bund_style)
-            para_w, para_h = sku_para.wrap(total_span_w, 9999)
-            actual_rh = max(row_height, para_h + 4)
-
-            table_data.append([sku_para, '', '', str(item['jumlah'])])
-            row_heights.append(actual_rh)
-            span_cmds.append(('SPAN', (0, row_idx), (2, row_idx)))
-            span_cmds.append(('ALIGN', (0, row_idx), (2, row_idx), m_align_str))
-            if not is_center:
-                span_cmds.append(('LEFTPADDING', (0, row_idx), (2, row_idx), 6))
-
-    return {
-        'table_data': table_data,
-        'row_heights': row_heights,
-        'span_cmds': span_cmds,
-        'total_rows': len(table_data),
-    }
+    """Generate data tabel khusus Format Bundling Pro (Fokus Visual Gudang)."""
+    return generate_table_data_bundling_pro(chunk, rak_map, label_cfg=label_cfg, picker_name=picker_name, bundling_map=bundling_map, bundling_2_cfg=bundling_cfg, W_pts=W_pts)
 
 def generate_table_data(chunk, is_extended, rak_map, label_cfg=None, picker_name=None, is_bundling=False, bundling_map=None, bundling_cfg=None, W_pts=283.46, is_bundling_2=False, bundling_2_cfg=None):
     """
@@ -5643,7 +5583,7 @@ def generate_table_data(chunk, is_extended, rak_map, label_cfg=None, picker_name
       - total_rows   : jumlah baris tabel (termasuk header)
     """
     if is_bundling_2:
-        return generate_table_data_bundling_2(chunk, is_extended, rak_map, label_cfg=label_cfg, picker_name=picker_name, bundling_map=bundling_map, bundling_cfg=bundling_2_cfg, W_pts=W_pts)
+        return generate_table_data_bundling_pro(chunk, rak_map, label_cfg=label_cfg, picker_name=picker_name, bundling_map=bundling_map, bundling_2_cfg=bundling_2_cfg, W_pts=W_pts)
     cfg = label_cfg or {}
     b_cfg = bundling_cfg or {}
     b_map = bundling_map or {}
@@ -6465,7 +6405,7 @@ def calc_items_for_rows(items, is_extended, rak_map, max_rendered_rows: int):
     return items, []
 
 
-def calc_items_for_rows_by_height(items, is_extended, rak_map, available_height: float, label_cfg, W_pts: float, force_first: bool = False, is_bundling: bool = False, bundling_cfg: dict = None, is_bundling_2: bool = False, bundling_2_cfg: dict = None, picker_name=None):
+def calc_items_for_rows_by_height(items, is_extended, rak_map, available_height: float, label_cfg, W_pts: float, force_first: bool = False, is_bundling: bool = False, bundling_cfg: dict = None, is_bundling_2: bool = False, bundling_2_cfg: dict = None, picker_name=None, bundling_map: dict = None):
     """
     Hitung item yang muat dalam `available_height` secara presisi menggunakan kalkulasi wrap teks Paragraph.
     """
@@ -6473,17 +6413,10 @@ def calc_items_for_rows_by_height(items, is_extended, rak_map, available_height:
     from reportlab.lib.styles import ParagraphStyle
     
     if is_bundling_2:
-        b_cfg = bundling_2_cfg or {}
-        b_widths = get_bundling_2_col_widths(b_cfg, W_pts=W_pts)
-        f_model = float(b_cfg.get('font_model', 8.0))
-        f_qty = float(b_cfg.get('font_qty', 13.5))
-        f_jenis = float(b_cfg.get('font_jenis', 9.0))
-        f_varian = float(b_cfg.get('font_varian', 8.0))
-        max_f = max(f_jenis, f_model, f_varian, f_qty)
-        row_h = max(float(b_cfg.get('row_height', 20.0)), max_f * 2.25)
-        col_msku_w = b_widths[1] # MODEL width
-        font_name = 'Helvetica'
-        f_msku = f_model
+        return calc_items_for_rows_bundling_pro(
+            items, rak_map, available_height, label_cfg, W_pts,
+            force_first=force_first, bundling_2_cfg=bundling_2_cfg, picker_name=picker_name, bundling_map=bundling_map
+        )
     elif is_bundling:
         b_cfg = bundling_cfg or {}
         b_widths = get_bundling_col_widths(b_cfg, W_pts=W_pts)
@@ -6907,6 +6840,9 @@ async def process_labels(
             label_cfg = await get_label_config()
         except:
             label_cfg = {}
+
+        if is_bundling_2 and bundling_2_cfg:
+            label_cfg = {**label_cfg, **bundling_2_cfg}
 
         try:
             bottom_priorities_res = await supabase_fetch("GET", "label_bottom_priorities")
@@ -7513,7 +7449,7 @@ async def process_labels(
                 ah = available_height_pts if first_page else limit_extra_pts
                 current_cfg = page1_cfg if first_page else scaled_cfg
                 
-                next_chunk, rest_after = calc_items_for_rows_by_height(rest, is_extended, rak_map, ah, current_cfg, W_pts, force_first=first_page, is_bundling=is_bundling, bundling_cfg=bundling_cfg, is_bundling_2=is_bundling_2, bundling_2_cfg=bundling_2_cfg, picker_name=picker_name)
+                next_chunk, rest_after = calc_items_for_rows_by_height(rest, is_extended, rak_map, ah, current_cfg, W_pts, force_first=first_page, is_bundling=is_bundling, bundling_cfg=bundling_cfg, is_bundling_2=is_bundling_2, bundling_2_cfg=bundling_2_cfg, picker_name=picker_name, bundling_map=bundling_map)
                 
                 # Enforce max 2 items on the first page for multi-item (resi pretelan)
                 if first_page and len(items) > 1:
@@ -8282,6 +8218,9 @@ async def process_labels_with_stats(
         except:
             label_cfg = {}
 
+        if is_bundling_2 and bundling_2_cfg:
+            label_cfg = {**label_cfg, **bundling_2_cfg}
+
         try:
             bottom_priorities_res = await supabase_fetch("GET", "label_bottom_priorities")
             bottom_priorities_std = [item['keyword'].strip().upper() for item in bottom_priorities_res if item['format_type'] == 'standar']
@@ -8887,7 +8826,7 @@ async def process_labels_with_stats(
                 ah = available_height_pts if first_page else limit_extra_pts
                 current_cfg = page1_cfg if first_page else scaled_cfg
                 
-                next_chunk, rest_after = calc_items_for_rows_by_height(rest, is_extended, rak_map, ah, current_cfg, W_pts, force_first=first_page, is_bundling=is_bundling, bundling_cfg=bundling_cfg, is_bundling_2=is_bundling_2, bundling_2_cfg=bundling_2_cfg, picker_name=picker_name)
+                next_chunk, rest_after = calc_items_for_rows_by_height(rest, is_extended, rak_map, ah, current_cfg, W_pts, force_first=first_page, is_bundling=is_bundling, bundling_cfg=bundling_cfg, is_bundling_2=is_bundling_2, bundling_2_cfg=bundling_2_cfg, picker_name=picker_name, bundling_map=bundling_map)
                 
                 # Enforce max 2 items on the first page for multi-item (resi pretelan)
                 if first_page and len(items) > 1:
