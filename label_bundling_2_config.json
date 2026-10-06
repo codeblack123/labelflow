@@ -1,11 +1,15 @@
 {
+  "col_rak": 75.0,
   "col_sku": 230.0,
   "col_qty": 40.0,
-  "font_rak": 9.5,
-  "font_sku": 9.5,
-  "font_qty": 15.0,
-  "font_header": 10.0,
+  "font_rak": 8.5,
+  "font_sku": 8.5,
+  "font_qty": 12.0,
+  "font_header": 9.0,
+  "font_badge": 10.5,
   "border_thickness": 0.5,
-  "highlight_qty_box": true,
-  "enable_badge": true
+  "highlight_qty_box": false,
+  "enable_badge": true,
+  "header_bg": "#ffffff",
+  "header_color": "#000000"
 }

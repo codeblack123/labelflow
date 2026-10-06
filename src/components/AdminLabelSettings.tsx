@@ -95,29 +95,37 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
     const updateBCfg = (key: keyof typeof BUNDLING_DEFAULTS, val: any) =>
         setBCfg(prev => ({ ...prev, [key]: val }));
 
-    // Bundling Pro format config (Layout Fokus Visual Gudang: 2 Kolom, Rak Besar, Teks SKU Jelas, Pita Hitam & Kotak QTY)
+    // Bundling Pro format config (Layout 3 Kolom 1000% Mirip Format Rak & ID dengan CEK KODE)
     interface BundlingProConfig {
-        col_sku: number;
+        col_rak?: number;
+        col_sku?: number;
         col_qty: number;
         font_rak: number;
         font_sku: number;
         font_qty: number;
         font_header: number;
+        font_badge?: number;
         border_thickness: number;
-        highlight_qty_box: boolean;
+        highlight_qty_box?: boolean;
         enable_badge: boolean;
+        header_bg?: string;
+        header_color?: string;
     }
 
     const BUNDLING_2_DEFAULTS: BundlingProConfig = {
+        col_rak: 75,
         col_sku: 230,
         col_qty: 40,
-        font_rak: 9.5,
-        font_sku: 9.5,
-        font_qty: 15,
-        font_header: 10,
+        font_rak: 8.5,
+        font_sku: 8.5,
+        font_qty: 12,
+        font_header: 9,
+        font_badge: 10.5,
         border_thickness: 0.5,
-        highlight_qty_box: true,
+        highlight_qty_box: false,
         enable_badge: true,
+        header_bg: '#ffffff',
+        header_color: '#000000',
     };
     const [b2Cfg, setB2Cfg] = useState<BundlingProConfig>({ ...BUNDLING_2_DEFAULTS });
     const updateB2Cfg = (key: keyof BundlingProConfig, val: any) =>
@@ -382,122 +390,139 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
         );
     };
 
+    const renderBundlingProPreviewSku = (skuText: string, isBundlingMatch: boolean, baseFontPt: number) => {
+        if (!isBundlingMatch) return <span>{skuText}</span>;
+        const regex = /(.*?)((?:\b|\d+)(?:BOX|DRUM|PACK|SLOP|SET|DZ|LUSIN|ROLL|BAG|BTL|TUBE|JAR|LBR)\b)(.*)/i;
+        const match = skuText.match(regex);
+        if (!match) return <span>{skuText}</span>;
+        const [, before, pkg, after] = match;
+        const largerPx = ptToCssPx(baseFontPt + 2);
+        return (
+            <span>
+                {before}
+                <span style={{ fontWeight: 'bold', fontSize: largerPx, color: '#000' }}>
+                    {pkg}
+                </span>
+                {after}
+            </span>
+        );
+    };
+
     const BundlingProPreview = () => {
-        const border = `${Math.max(0.5, b2Cfg.border_thickness)}px solid #111`;
-        const totalW = Math.round(270 * SCALE);
-        const qtyW = Math.round(b2Cfg.col_qty * SCALE);
-        const skuW = totalW - qtyW;
+        const rw = ptToPx(cfg.ext_col_rak || 80);
+        const mw = ptToPx(cfg.ext_col_msku || 150);
+        const qw = ptToPx(cfg.ext_col_qty || 50);
+        const totalW = rw + mw + qw;
+
+        const fr = ptToCssPx(cfg.ext_font_rak || 10.5);
+        const fm = ptToCssPx(cfg.ext_font_msku || 10.5);
+        const fq = ptToCssPx(cfg.ext_font_qty || 13.5);
+
+        const maxFont = Math.max(cfg.ext_font_rak || 10.5, cfg.ext_font_msku || 10.5, cfg.ext_font_qty || 13.5);
+        const calcExtRowH = Math.max(cfg.ext_row_height || 25, maxFont * 2.25);
+        const baseRh = ptToPx(calcExtRowH);
+        const border = `${Math.max(0.5, cfg.border_thickness || 0.5)}px solid #111`;
 
         const sampleItems = [
             {
-                rak: 'RAK 4-AG-03-10',
-                sku: 'BOOK-1PACK/CLBK-3501',
-                badge: 'CEK KODE: CLBK-3501',
+                rak: '11-EA-04-10',
+                sku: 'MARKER-1BOX/WM-60/BLACK',
                 inBundlingDb: true,
-                qty: 1
+                qty: 5
             },
             {
-                rak: 'RAK 3-W-03-09',
+                rak: '3-W-03-09',
                 sku: 'BINDERNOTE-B5-MHPT-143/PURPLE',
-                badge: 'CEK WARNA: PURPLE',
-                inBundlingDb: true,
+                inBundlingDb: false,
                 qty: 6
             },
             {
-                rak: 'RAK 12-AB-01-03',
-                sku: 'PULPEN-GEL-REGULER-STD',
-                badge: null,
-                inBundlingDb: false,
+                rak: '4-AG-03-10',
+                sku: 'BOOK-1PACK/CLBK-3505',
+                inBundlingDb: true,
                 qty: 1
+            },
+            {
+                rak: '2-B-01-05',
+                sku: 'LEM-1DRUM/GLUE-500',
+                inBundlingDb: true,
+                qty: 2
             }
         ];
 
         return (
-            <table style={{ borderCollapse: 'collapse', width: totalW, tableLayout: 'fixed' }}>
-                <tbody>
-                    {/* Row 0: Header PIC Center */}
-                    <tr style={{ background: '#fff' }}>
-                        <td colSpan={2} style={{
-                            border, padding: '4px 6px', textAlign: 'center',
-                            fontSize: ptToCssPx(b2Cfg.font_header || 10),
-                            fontFamily: 'Helvetica, Arial, sans-serif',
-                            fontWeight: 'bold', color: '#111'
-                        }}>
-                            PIC : ROMY
-                        </td>
-                    </tr>
-                    {/* Item Rows */}
-                    {sampleItems.map((item, idx) => (
-                        <tr key={idx} style={{ background: '#fff' }}>
+            <div style={{ width: totalW, boxSizing: 'border-box' }}>
+                <table style={{ borderCollapse: 'collapse', width: totalW, tableLayout: 'fixed' }}>
+                    <tbody>
+                        {/* Row 0: Header 3 Kolom 1000% Identik Format Rak & ID */}
+                        <tr style={{ background: cfg.header_bg || '#fff' }}>
                             <td style={{
-                                width: skuW, border, padding: '6px 7px',
-                                verticalAlign: 'middle', textAlign: 'left'
+                                width: rw, border, padding: '2px 4px', textAlign: 'center',
+                                fontSize: '12px',
+                                fontFamily: 'Helvetica, Arial, sans-serif',
+                                fontWeight: 'bold', color: cfg.header_color || '#000'
                             }}>
-                                <div style={{ lineHeight: 1.2 }}>
-                                    <span style={{ fontSize: '9px', color: '#555', fontWeight: 600 }}>RAK &amp; ID : </span>
-                                    <span style={{
-                                        fontSize: ptToCssPx(b2Cfg.font_rak || 9.5),
-                                        fontWeight: 'bold', color: '#111'
-                                    }}>
-                                        {item.rak}
-                                    </span>
-                                </div>
-                                {/* Garis putus-putus sepanjang teks Rak & ID */}
-                                <div style={{
-                                    borderBottom: '1px dashed #666',
-                                    width: '78%',
-                                    margin: '3px 0 4px 0'
-                                }} />
-                                <div style={{
-                                    fontSize: ptToCssPx(b2Cfg.font_sku || 9.5),
-                                    fontWeight: 'bold', color: '#111', lineHeight: 1.25
-                                }}>
-                                    {item.sku}
-                                </div>
-                                {b2Cfg.enable_badge && item.inBundlingDb && item.badge && (
-                                    <div style={{
-                                        marginTop: '5px',
-                                        background: '#fff',
-                                        color: '#000',
-                                        border: '1.5px solid #000',
-                                        fontSize: '9.5px',
-                                        fontWeight: 'bold',
-                                        padding: '1px 6px',
-                                        display: 'inline-block',
-                                        borderRadius: '1px',
-                                        letterSpacing: '0.2px'
-                                    }}>
-                                        {item.badge}
-                                    </div>
-                                )}
+                                Rak &amp; ID
                             </td>
                             <td style={{
-                                width: qtyW, border, padding: '4px 2px',
-                                textAlign: 'center', verticalAlign: 'middle'
+                                width: mw, border, padding: '2px 4px', textAlign: 'center',
+                                fontSize: '12px',
+                                fontFamily: 'Helvetica, Arial, sans-serif',
+                                fontWeight: 'bold', color: cfg.header_color || '#000'
                             }}>
-                                {item.qty > 1 && b2Cfg.highlight_qty_box ? (
-                                    <div style={{
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        width: '26px', height: '26px',
-                                        border: '2px solid #000',
-                                        fontSize: ptToCssPx(b2Cfg.font_qty || 15),
-                                        fontWeight: 'bold', color: '#111'
-                                    }}>
-                                        {item.qty}
-                                    </div>
-                                ) : (
-                                    <span style={{
-                                        fontSize: ptToCssPx(b2Cfg.font_qty || 15),
-                                        fontWeight: 'bold', color: '#111'
-                                    }}>
-                                        {item.qty}
-                                    </span>
-                                )}
+                                MSKU &nbsp;|&nbsp; PIC : SADAM
+                            </td>
+                            <td style={{
+                                width: qw, border, padding: '2px 4px', textAlign: 'center',
+                                fontSize: '12px',
+                                fontFamily: 'Helvetica, Arial, sans-serif',
+                                fontWeight: 'bold', color: cfg.header_color || '#000'
+                            }}>
+                                Qty
                             </td>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                        {/* Item Rows 1000% Identik Format Rak & ID */}
+                        {sampleItems.map((item, idx) => (
+                            <tr key={idx} style={{ background: '#fff' }}>
+                                <td style={{
+                                    width: rw, minHeight: baseRh, border, padding: '2px 4px',
+                                    textAlign: 'center', verticalAlign: 'middle',
+                                    fontSize: fr,
+                                    fontFamily: cfg.ext_font_rak_family || 'Bahnschrift, Arial, sans-serif',
+                                    fontWeight: cfg.ext_font_rak_bold ? 'bold' : 'normal',
+                                    color: '#111',
+                                    wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal',
+                                    lineHeight: 1.4,
+                                }}>
+                                    {item.rak}
+                                </td>
+                                <td style={{
+                                    width: mw, minHeight: baseRh, border, padding: '2px 4px',
+                                    fontSize: fm,
+                                    fontFamily: cfg.ext_font_msku_family || 'Helvetica, Arial, sans-serif',
+                                    fontWeight: cfg.ext_font_msku_bold ? 'bold' : 'normal',
+                                    color: '#111',
+                                    textAlign: 'left', verticalAlign: 'middle',
+                                    wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'normal',
+                                    lineHeight: 1.4,
+                                }}>
+                                    {renderBundlingProPreviewSku(item.sku, item.inBundlingDb, cfg.ext_font_msku || 10.5)}
+                                </td>
+                                <td style={{
+                                    width: qw, minHeight: baseRh, border, padding: '2px 4px',
+                                    fontSize: fq,
+                                    fontFamily: cfg.ext_font_qty_family || 'Bahnschrift, Arial, sans-serif',
+                                    fontWeight: cfg.ext_font_qty_bold ? 'bold' : 'normal',
+                                    color: '#111',
+                                    textAlign: 'center', verticalAlign: 'middle',
+                                }}>
+                                    {item.qty}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         );
     };
 
@@ -637,10 +662,10 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
                         { 
                             key: 'bundling_2', 
                             title: 'Format Bundling Pro', 
-                            cols: 2, 
-                            desc: 'Layout fokus mata: Rak & ID besar bold, SKU jelas, pita cek varian & kotak QTY.',
-                            headers: ['RAK & SKU', 'QTY'],
-                            data: ['RAK 14-FW-01-01', '2'],
+                            cols: 3, 
+                            desc: 'Layout 3 kolom (Rak & ID · MSKU · QTY) 1000% identik Format Rak & ID. Teks kemasan (1BOX, 1DRUM, 1PACK, 1SLOP) otomatis tebal & +2pt khusus SKU yang cocok di Database SKU Bundling (kolom SKU Bundle).',
+                            headers: ['RAK & ID', 'MSKU | PIC', 'QTY'],
+                            data: ['11-EA-04-10', 'MARKER-1BOX...', '5'],
                             badge: 'Bundling Pro',
                             theme: 'purple'
                         },
@@ -1074,7 +1099,7 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
                 </div>
             )}
 
-            {/* ---- TAB: BUNDLING PRO SETTINGS (LAYOUT FOKUS VISUAL GUDANG) ---- */}
+            {/* ---- TAB: BUNDLING PRO SETTINGS (1000% IDENTIK FORMAT RAK & ID + CEK KODE) ---- */}
             {activeTab === 'bundling_2' && (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                     {/* Controls */}
@@ -1094,133 +1119,70 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
                                 </button>
                             </div>
                         </div>
-                        <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100 mb-4">
+                        <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 mb-4 space-y-2">
+                            <p className="text-xs font-bold text-purple-700">
+                                📦 Penonjolan Kemasan Bundling (1BOX, 1DRUM, 1PACK, 1SLOP)
+                            </p>
                             <p className="text-[11px] text-purple-700 leading-relaxed">
-                                <b>Format Bundling Pro (Fokus Visual Gudang):</b> Layout 2-kolom dengan penekanan lokasi RAK &amp; ID dan teks SKU dengan garis pemisah putus-putus. Kolom Cek Kode / Varian otomatis <b>hanya muncul</b> untuk item yang terdaftar di <b>Database SKU Bundling</b> menggunakan bingkai kotak tajam yang aman untuk thermal head printer. Sisi kanan kolom QTY responsif sehingga border tidak terpotong.
+                                Format Bundling Pro adalah salinan <b>1000% identik dari Format Rak &amp; ID</b> (3 kolom: Rak &amp; ID, MSKU, Qty). 
+                                Khusus untuk data SKU resi yang cocok dengan kolom <b>SKU Bundle</b> di <b>Database SKU Bundling</b>, teks kemasan seperti <b>1BOX, 1DRUM, 1PACK, 1SLOP</b> otomatis dicetak <b>TEBAL (Bold)</b> dan ukurannya bertambah <b>+2pt</b> dari ukuran font kolom MSKU saat ini.
                             </p>
                         </div>
+
+                        {/* Pengaturan Lebar Kolom (Sama persis dengan Rak & ID) */}
                         <div className="space-y-5">
-                            <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">Lebar Kolom (pt)</p>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Lebar Kolom SKU &amp; Rak</label>
-                                    <span className="text-xs font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-100">{b2Cfg.col_sku}pt</span>
-                                </div>
-                                <input
-                                    type="range" min={160} max={260} step={1} value={b2Cfg.col_sku}
-                                    onChange={e => updateB2Cfg('col_sku', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400"><span>160pt</span><span>260pt</span></div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Lebar Kolom QTY</label>
-                                    <span className="text-xs font-mono bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md border border-purple-100">{b2Cfg.col_qty}pt</span>
-                                </div>
-                                <input
-                                    type="range" min={25} max={70} step={1} value={b2Cfg.col_qty}
-                                    onChange={e => updateB2Cfg('col_qty', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400"><span>25pt</span><span>70pt</span></div>
-                            </div>
+                            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">Lebar Kolom Tabel</p>
+                            <Slider label="Lebar Rak & ID" stateKey="ext_col_rak" min={40} max={150} />
+                            <Slider label="Lebar MSKU" stateKey="ext_col_msku" min={80} max={250} />
+                            <Slider label="Lebar Qty" stateKey="ext_col_qty" min={30} max={100} />
                         </div>
 
+                        {/* Pengaturan Tinggi & Font (Sama persis dengan Rak & ID) */}
                         <div className="space-y-5">
-                            <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Ukuran Font (pt)</p>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Font RAK &amp; ID</label>
-                                    <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">{b2Cfg.font_rak}pt</span>
+                            <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">Tinggi Baris &amp; Font</p>
+                            <Slider label="Font Rak & ID" stateKey="ext_font_rak" min={6} max={24} step={0.5} unit="pt" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FontSelect label="Jenis Font Rak & ID" stateKey="ext_font_rak_family" />
+                                <div className="flex items-end pb-1.5">
+                                    <BoldToggle label="Bold Rak" stateKey="ext_font_rak_bold" />
                                 </div>
-                                <input
-                                    type="range" min={8} max={18} step={0.5} value={b2Cfg.font_rak}
-                                    onChange={e => updateB2Cfg('font_rak', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400"><span>8pt</span><span>18pt</span></div>
                             </div>
-
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Font Teks SKU</label>
-                                    <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">{b2Cfg.font_sku}pt</span>
+                            <Slider label="Font MSKU" stateKey="ext_font_msku" min={6} max={24} step={0.5} unit="pt" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FontSelect label="Jenis Font MSKU" stateKey="ext_font_msku_family" />
+                                <div className="flex items-end pb-1.5">
+                                    <BoldToggle label="Bold MSKU" stateKey="ext_font_msku_bold" />
                                 </div>
-                                <input
-                                    type="range" min={6} max={14} step={0.5} value={b2Cfg.font_sku}
-                                    onChange={e => updateB2Cfg('font_sku', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400"><span>6pt</span><span>14pt</span></div>
                             </div>
-
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Font Angka QTY</label>
-                                    <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">{b2Cfg.font_qty}pt</span>
+                            <Slider label="Font Qty" stateKey="ext_font_qty" min={6} max={24} step={0.5} unit="pt" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FontSelect label="Jenis Font Qty" stateKey="ext_font_qty_family" />
+                                <div className="flex items-end pb-1.5">
+                                    <BoldToggle label="Bold Qty" stateKey="ext_font_qty_bold" />
                                 </div>
-                                <input
-                                    type="range" min={10} max={26} step={0.5} value={b2Cfg.font_qty}
-                                    onChange={e => updateB2Cfg('font_qty', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400"><span>10pt</span><span>26pt</span></div>
                             </div>
-
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Font Header PIC</label>
-                                    <span className="text-xs font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">{b2Cfg.font_header}pt</span>
-                                </div>
-                                <input
-                                    type="range" min={8} max={14} step={0.5} value={b2Cfg.font_header}
-                                    onChange={e => updateB2Cfg('font_header', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-400"><span>8pt</span><span>14pt</span></div>
-                            </div>
+                            <Slider label="Tinggi Baris Minimum" stateKey="ext_row_height" min={12} max={40} />
                         </div>
 
-                        <div className="space-y-4 pt-2 border-t border-gray-100">
-                            <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">Fitur Visual &amp; Border</p>
-                            
-                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                        {/* Border & Warna Header (Sama persis dengan Rak & ID) */}
+                        <div className="space-y-5">
+                            <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">Border &amp; Warna Header</p>
+                            <Slider label="Ketebalan Border" stateKey="border_thickness" min={0} max={3} step={0.5} />
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <p className="text-xs font-semibold text-gray-800">Kotak Sorotan QTY &gt; 1</p>
-                                    <p className="text-[10px] text-gray-500">Beri kotak hitam tebal [ 2 ] jika Qty lebih dari 1 agar tidak salah ambil.</p>
+                                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">Warna BG Header</label>
+                                    <div className="flex items-center gap-2">
+                                        <input type="color" value={cfg.header_bg} onChange={e => updateCfg('header_bg', e.target.value)} className="h-9 w-16 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
+                                        <code className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-600">{cfg.header_bg}</code>
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={() => updateB2Cfg('highlight_qty_box', !b2Cfg.highlight_qty_box)}
-                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${b2Cfg.highlight_qty_box ? 'bg-purple-600' : 'bg-gray-200'}`}
-                                >
-                                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${b2Cfg.highlight_qty_box ? 'translate-x-5' : 'translate-x-1'}`} />
-                                </button>
-                            </div>
-
-                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                                 <div>
-                                    <p className="text-xs font-semibold text-gray-800">Bingkai Kotak Cek Kode / Varian</p>
-                                    <p className="text-[10px] text-gray-500">Tampilkan bingkai kotak [ CEK KODE / CEK WARNA ] (khusus SKU terdaftar di Database SKU Bundling, aman untuk thermal head).</p>
+                                    <label className="text-xs font-semibold text-gray-600 block mb-1.5">Warna Teks Header</label>
+                                    <div className="flex items-center gap-2">
+                                        <input type="color" value={cfg.header_color} onChange={e => updateCfg('header_color', e.target.value)} className="h-9 w-16 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
+                                        <code className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-600">{cfg.header_color}</code>
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={() => updateB2Cfg('enable_badge', !b2Cfg.enable_badge)}
-                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${b2Cfg.enable_badge ? 'bg-purple-600' : 'bg-gray-200'}`}
-                                >
-                                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${b2Cfg.enable_badge ? 'translate-x-5' : 'translate-x-1'}`} />
-                                </button>
-                            </div>
-
-                            <div className="space-y-1.5 pt-1">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-semibold text-gray-600">Ketebalan Border Tabel</label>
-                                    <span className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md border border-gray-200">{b2Cfg.border_thickness}pt</span>
-                                </div>
-                                <input
-                                    type="range" min={0.5} max={2.5} step={0.5} value={b2Cfg.border_thickness}
-                                    onChange={e => updateB2Cfg('border_thickness', parseFloat(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
-                                />
                             </div>
                         </div>
                     </div>
@@ -1237,30 +1199,41 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
                                     </div>
                                     <BundlingProPreview />
                                     <div className="text-[10px] text-gray-400 mt-2 text-right">
-                                        Total Lebar Tabel: {b2Cfg.col_sku + b2Cfg.col_qty}pt
+                                        Total Lebar: {cfg.ext_col_rak + cfg.ext_col_msku + cfg.ext_col_qty}pt
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 flex gap-3 items-start">
-                            <FiInfo className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-700 leading-relaxed">Preview ini adalah simulasi visual. Tampilan asli PDF mungkin sedikit berbeda tergantung konten dan panjang MSKU.</p>
+                        <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 flex gap-3 items-start">
+                            <FiInfo className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-purple-700 leading-relaxed">
+                                Format Bundling Pro menampilkan tata letak tabel yang 1000% identik dengan Format Rak &amp; ID. Kata kemasan (1BOX, 1DRUM, 1PACK, 1SLOP) otomatis tebal &amp; +2pt jika SKU cocok dengan kolom SKU Bundle pada Database SKU Bundling.
+                            </p>
                         </div>
                         <div className="flex gap-2 pt-2">
                             <button
                                 onClick={() => {
                                     setB2Cfg({ ...BUNDLING_2_DEFAULTS });
-                                    showToast?.('Pengaturan direset ke default Bundling Pro');
+                                    showToast?.('Pengaturan Format Bundling Pro direset');
                                 }}
                                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
                             >
                                 <FiRefreshCw className="w-4 h-4" />Reset Default
                             </button>
                             <button
-                                onClick={() => {
-                                    axios.post(`${API_CONFIG.BASE_URL}/settings/label-bundling-2-config`, b2Cfg)
-                                        .then(() => showToast?.('Pengaturan Format Bundling Pro disimpan!'))
-                                        .catch(() => showToast?.('Gagal menyimpan (gunakan nilai default)'));
+                                onClick={async () => {
+                                    setIsSaving(true);
+                                    try {
+                                        await Promise.all([
+                                            axios.post(`${API_CONFIG.BASE_URL}/settings/label-table-config`, cfg),
+                                            axios.post(`${API_CONFIG.BASE_URL}/settings/label-bundling-2-config`, b2Cfg),
+                                        ]);
+                                        showToast?.('Pengaturan Format Bundling Pro disimpan!');
+                                    } catch (e: any) {
+                                        showToast?.('Gagal menyimpan pengaturan');
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
                                 }}
                                 className="flex items-center gap-2 px-6 py-2 bg-purple-600 text-white rounded-xl font-semibold text-sm hover:bg-purple-700 transition-all shadow-md"
                             >

@@ -1,45 +1,69 @@
-# Implementasi Fitur Hapus Permanen Khusus User (Maksimal 60 Menit)
+# Implementation Plan - Format Bundling Pro (1000% Identik Format Rak & ID + Penonjolan Kemasan Bundling)
 
-Tujuan dari rencana ini adalah membuat fitur "Hapus Permanen" di menu Riwayat yang hanya muncul untuk user yang memproses data tersebut, dan tombol tersebut hanya tersedia selama 60 menit terhitung dari waktu proses (berdasarkan server). Keamanan akan dijaga murni di backend (API) sehingga tidak bisa di-*hack* hanya dengan *inspect element*.
+## 📌 Ringkasan Permintaan User
+1. **1000% Mirip Format Rak & ID**:
+   - Format Bundling Pro adalah salinan format label dari **Format Rak & ID** (3 kolom: `Rak & ID`, `MSKU`, `Qty`).
+   - **TIDAK PERLU** ada kotak atau teks "CEK KODE" di bawah tabel (dihapus total dari backend, pengaturan, dan preview).
+2. **Pencocokan Database SKU Bundling**:
+   - Data SKU pada resi label hanya dicocokkan dengan kolom **`SKU Bundle`** pada menu/tabel `Database SKU Bundling` (`sku_bundling`).
+   - **TIDAK BOLEH** mencocokkan dengan kolom `SKU Satuan`.
+3. **Penebalan & Penambahan Ukuran Font Kemasan (+2pt)**:
+   - Jika SKU pada label ditemukan dan cocok di kolom `SKU Bundle`:
+     - Bagian unit/kemasan bundling (seperti `1BOX`, `1DRUM`, `1PACK`, `1SLOP`, dsb.) akan:
+       - **Dicetak Tebal (Bold)**: `<b>...</b>`
+       - **Ukuran font bertambah +2pt** dari ukuran font kolom MSKU saat ini.
+       - *Contoh*: Jika font kolom MSKU adalah `10.5pt`, maka teks `1BOX` pada SKU `MARKER-1BOX/WM-60/BLACK` bertambah +2pt menjadi `12.5pt` dan tebal:
+         `MARKER-`<b style="font-size:12.5pt">1BOX</b>`/WM-60/BLACK`.
+     - Sisa teks SKU lainnya tetap memakai ukuran font normal kolom MSKU.
+   - Jika SKU tidak ada di Database SKU Bundling (atau tidak cocok dengan kolom `SKU Bundle`), teks SKU dicetak standar (tanpa penebalan / penambahan size).
 
-> [!IMPORTANT]
-> **Tindakan Manual Diperlukan:** Agar sistem bisa mengenali siapa yang memproses sebuah data, kita wajib menambahkan satu kolom baru yaitu `username` ke dalam tabel `label_process_history` di database Supabase Anda. Anda bisa menambahkannya dengan mudah melalui menu SQL Editor di Supabase.
+---
 
-## Proposed Changes
+## 🛠️ Rencana Perubahan Detail
 
-### 1. Perubahan Skema Database (Supabase)
-Karena Supabase Anda hanya bisa diakses oleh Anda, Anda perlu menjalankan perintah SQL ini di Supabase SQL Editor:
-```sql
-ALTER TABLE label_process_history ADD COLUMN username text;
-```
-*(Kolom ini berfungsi untuk menyimpan nama user yang memproses pesanan tersebut)*
+### 1. Backend (`main.py`)
+- **Penyesuaian Query Data SKU Bundling**:
+  - Pada query Supabase ke tabel `sku_bundling`, siapkan set khusus `bundling_bundle_skus` yang **HANYA** menampung nilai dari kolom `sku_bundle` (uppercase & strip). Kolom `sku_satuan` diabaikan untuk pencocokan Bundling Pro.
+- **Pembersihan Logika "CEK KODE"**:
+  - Hapus fungsi pembantu `extract_bundling_pro_badge`.
+  - Hapus baris pemisah (spacer row) dan baris kotak outline `[CEK KODE: ...]` di bawah tabel pada fungsi `generate_table_data_bundling_pro` dan `create_table_bundling_pro`.
+- **Logika Formatting SKU Bundling Pro**:
+  - Buat fungsi penyorotan kemasan SKU, misal `format_bundling_pro_sku(raw_sku, font_name, base_font_size, max_width, is_matched_bundle)`:
+    - Jika `is_matched_bundle` bernilai `True`:
+      - Deteksi token kemasan via regex: `(?<![a-zA-Z0-9])(\d*(?:BOX|DRUM|PACK|SLOP|SET|DZ|LUSIN|ROLL|BAG|BTL|TUBE|JAR|LBR))(?![a-zA-Z0-9])`.
+      - Bungkus token yang cocok dengan tag `<font size="{base_font_size + 2.0:.1f}"><b>...</b></font>`.
+    - Lakukan pemotongan baris (*line wrapping*) yang presisi ke dalam ReportLab `Paragraph`.
+- **Kalkulasi Tinggi Halaman (`calc_items_for_rows_bundling_pro`)**:
+  - Hapus penambahan tinggi untuk kotak badge cek kode (`extra_badge_h = 0`).
+  - Hitung tinggi item secara akurat berdasarkan tinggi wrap dari Paragraph yang telah memuat font kemasan berukuran `+2pt`.
 
-### 2. Frontend (`src/App.tsx`)
-#### [MODIFY] [App.tsx](file:///c:/Users/jgilb/OneDrive/Dokumen/bolt%20new/8_shipping-label-customizer/shipping-label-customizer%209%20new%2023/shipping-label-customizer%209%20new%2023/src/App.tsx)
-- Pada fungsi `saveToHistory`, saya akan menambahkan variabel `username: user?.username || 'unknown'` ke dalam *payload* yang dikirim ke Supabase. Dengan ini, setiap kali proses upload massal/single berhasil, Supabase akan mencatat siapa pelakunya.
+### 2. Frontend (`src/components/AdminLabelSettings.tsx`)
+- **Kartu Pilihan Format**:
+  - Perbarui deskripsi opsi `bundling_2` (Format Bundling Pro):
+    *3 Kolom (Rak & ID · MSKU · Qty) 1000% identik Format Rak & ID. Kata kemasan (1BOX, 1DRUM, 1PACK, 1SLOP) otomatis Bold & +2pt jika cocok dengan kolom SKU Bundle di Database SKU Bundling.*
+- **Tab Pengaturan Format Bundling Pro**:
+  - Hapus section *"Fitur Kotak Cek Kode Bundling"* (toggle bingkai dan slider font cek kode).
+  - Pertahankan pengaturan lebar kolom, jenis font, ketebalan border, dan warna header (sama persis dengan Format Rak & ID).
+- **Live Preview (`BundlingProPreview`)**:
+  - Hapus kotak outline `[CEK KODE: ...]` di bawah tabel preview.
+  - Perbarui contoh SKU di live preview (misal: `MARKER-1BOX/WM-60/BLACK`, `LEM-1DRUM/GLUE-500`, `BOOK-1PACK/CLBK-3505`) untuk mendemonstrasikan teks kemasan `1BOX`, `1DRUM`, `1PACK` yang dicetak tebal dan lebih besar +2pt secara inline di kolom MSKU.
 
-### 3. Frontend (`src/components/OrderHistory.tsx`)
-#### [MODIFY] [OrderHistory.tsx](file:///c:/Users/jgilb/OneDrive/Dokumen/bolt%20new/8_shipping-label-customizer/shipping-label-customizer%209%20new%2023/shipping-label-customizer%209%20new%2023/src/components/OrderHistory.tsx)
-- Menambahkan logika pengecekan waktu: Membandingkan waktu `created_at` milik data dengan waktu saat ini.
-- Menampilkan tombol **"Hapus Data (Sisa waktu: XX menit)"** murni HANYA JIKA:
-  1. `record.username` sama dengan user yang sedang login (`user.username`).
-  2. Selisih waktu belum lewat dari 60 menit.
-- Jika lewat 60 menit, tombol akan hilang otomatis.
-- Mengirim parameter `username` ke API saat tombol Hapus diklik.
+---
 
-### 4. Backend (`main.py`)
-#### [MODIFY] [main.py](file:///c:/Users/jgilb/OneDrive/Dokumen/bolt%20new/8_shipping-label-customizer/shipping-label-customizer%209%20new%2023/shipping-label-customizer%209%20new%2023/main.py)
-- Memodifikasi *endpoint* `DELETE /history/{record_id}` agar menerima parameter `username`.
-- **Validasi Keamanan Ekstra (Anti Hack Inspect Element)**: Saat *request* Hapus diterima, server Python akan mengecek ke Supabase:
-  1. Apakah `username` yang meminta hapus SAMA dengan `username` pembuat data? (Jika beda, tolak dengan error 403 Forbidden).
-  2. Apakah waktu sekarang (di server) masih dalam rentang 60 menit dari waktu pembuatan data? (Jika sudah kadaluarsa, tolak dengan error 403 Forbidden).
-- Dengan sistem validasi ganda di backend ini, meskipun seseorang memakai Inspect Element untuk memunculkan paksa tombol hapusnya, sistem server akan langsung menolaknya.
-
-## Verification Plan
-1. Anda perlu menjalankan SQL query untuk menambah kolom `username`.
-2. Kita akan mencoba memproses 1 file Excel baru sebagai "User A".
-3. Di menu riwayat, User A akan melihat tombol hapus dengan hitung mundur 60 menit.
-4. Kita akan mencoba *login* sebagai "User B" dan memastikan tombol hapus tersebut tidak muncul pada riwayat milik User A.
-5. Saya akan mencoba memaksa hapus via API untuk mensimulasikan percobaan *hacking* dan memastikan server benar-benar menolak perintahnya.
-
-Silakan berikan persetujuan Anda, dan tolong konfirmasi jika Anda sudah menjalankan perintah SQL penambahan kolom tersebut di Supabase Anda!
+## 🧪 Rencana Verifikasi (Verification Plan)
+1. **Unit Testing Backend (Python ReportLab)**:
+   - Jalankan skrip scratch untuk menguji fungsi ReportLab Paragraph dengan berbagai SKU:
+     - `MARKER-1BOX/WM-60/BLACK`
+     - `LEM-1DRUM/GLUE-500`
+     - `BOOK-1PACK/CLBK-3505`
+     - `ROKOK-1SLOP/SAMPLE`
+     - SKU non-bundling (tidak cocok)
+   - Verifikasi bahwa teks kemasan tampil tebal dan +2pt, sedangkan teks lain tetap pada ukuran asli kolom MSKU.
+2. **Verifikasi Output PDF Visual**:
+   - Generate contoh PDF label 100mm (283pt) dengan tabel 3 kolom dan pastikan tabel 1000% identik dengan Format Rak & ID tanpa kotak CEK KODE.
+3. **Verifikasi Frontend**:
+   - Buka `http://localhost:5173/` dan periksa menu Pengaturan Label:
+     - Kartu format Bundling Pro bersih tanpa menyebutkan Cek Kode.
+     - Live preview menampilkan highlight bold & +2pt pada kata `1BOX` di kolom MSKU.
+4. **Verifikasi Pencocokan Database**:
+   - Pastikan SKU pada resi hanya dicocokkan dengan nilai di kolom `sku_bundle`, dan jika resi berisi nilai dari `sku_satuan`, efek +2pt & bold tidak akan diterapkan.
