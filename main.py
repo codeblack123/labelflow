@@ -2792,31 +2792,31 @@ LABEL_BUNDLING_2_CONFIG_FILE = "label_bundling_2_config.json"
 
 class LabelBundling2ConfigItem(BaseModel):
     # Kolom & font Format Bundling Pro (Layout 3 Kolom 1000% Mirip Format Rak & ID)
-    col_rak: float = 75.0
-    col_qty: float = 40.0
-    font_rak: float = 8.5
-    font_sku: float = 8.5
-    font_qty: float = 12.0
-    font_header: float = 9.0
+    col_rak: float = 80.0
+    col_qty: float = 50.0
+    font_rak: float = 10.5
+    font_sku: float = 10.5
+    font_qty: float = 13.5
+    font_header: float = 10.0
     font_badge: float = 10.5
     border_thickness: float = 0.5
-    enable_badge: bool = True
+    enable_badge: bool = False
     header_bg: Optional[str] = "#ffffff"
     header_color: Optional[str] = "#000000"
 
     # Backward compatibility fields
-    col_sku: Optional[float] = 230.0
+    col_sku: Optional[float] = 150.0
     ext_col_rak: Optional[float] = 80.0
     ext_col_msku: Optional[float] = 150.0
     ext_col_qty: Optional[float] = 50.0
-    ext_font_rak: Optional[float] = 10.0
-    ext_font_msku: Optional[float] = 8.0
+    ext_font_rak: Optional[float] = 10.5
+    ext_font_msku: Optional[float] = 10.5
     ext_font_qty: Optional[float] = 13.5
     ext_row_height: Optional[float] = 25.0
     col_jenis: Optional[float] = 65.0
     col_model: Optional[float] = 113.0
     col_varian: Optional[float] = 55.5
-    row_height: Optional[float] = 20.0
+    row_height: Optional[float] = 25.0
     align_model: Optional[str] = 'left'
 
 @app.get("/settings/label-bundling-2-config")
@@ -5229,12 +5229,12 @@ def generate_table_data_bundling_pro(chunk, rak_map, label_cfg=None, picker_name
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
 
-    # Gabungkan label_cfg (dari app_settings) dengan bundling_2_cfg jika ada override
-    cfg = {**(label_cfg or {}), **(bundling_2_cfg or {})}
+    # Gunakan label_cfg (1000% identik dengan Format Rak & ID)
+    cfg = label_cfg or {}
 
-    ext_f_rak  = float(cfg.get('ext_font_rak', cfg.get('font_rak', 10.5)))
-    ext_f_msku = float(cfg.get('ext_font_msku', cfg.get('font_sku', 10.5)))
-    ext_f_qty  = float(cfg.get('ext_font_qty', cfg.get('font_qty', 13.5)))
+    ext_f_rak  = float(cfg.get('ext_font_rak') or cfg.get('ext_font_size', 10.5))
+    ext_f_msku = float(cfg.get('ext_font_msku') or cfg.get('ext_font_size', 10.5))
+    ext_f_qty  = float(cfg.get('ext_font_qty') or cfg.get('ext_font_size', 13.5))
 
     ext_f_rak_fam  = cfg.get('ext_font_rak_family', 'Bahnschrift')
     ext_f_msku_fam = cfg.get('ext_font_msku_family', 'Helvetica')
@@ -5253,9 +5253,9 @@ def generate_table_data_bundling_pro(chunk, rak_map, label_cfg=None, picker_name
     ext_leading = max(14, round(ext_f_msku * 1.75))
 
     # Lebar kolom: 1000% sama dengan Format Rak & ID (ext_col_rak, ext_col_msku, ext_col_qty)
-    col_rak_w  = float(cfg.get('ext_col_rak', cfg.get('col_rak', 80.0)))
-    col_qty_w  = float(cfg.get('ext_col_qty', cfg.get('col_qty', 50.0)))
-    col_msku_w = float(cfg.get('ext_col_msku', cfg.get('col_sku', 150.0)))
+    col_rak_w  = float(cfg.get('ext_col_rak', 80.0))
+    col_qty_w  = float(cfg.get('ext_col_qty', 50.0))
+    col_msku_w = float(cfg.get('ext_col_msku', 150.0))
     border     = float(cfg.get('border_thickness', 0.5))
 
     # Header Style (Identik 1000% dengan Format Rak & ID)
@@ -5356,12 +5356,12 @@ def create_table_bundling_pro(data, row_heights=None, span_cmds=None, label_cfg=
     from reportlab.platypus import Table, TableStyle
     from reportlab.lib import colors
 
-    cfg = {**(label_cfg or {}), **(bundling_2_cfg or {})}
+    cfg = label_cfg or {}
 
     if not col_widths:
-        col_rak_w  = float(cfg.get('ext_col_rak', cfg.get('col_rak', 80.0)))
-        col_qty_w  = float(cfg.get('ext_col_qty', cfg.get('col_qty', 50.0)))
-        col_msku_w = float(cfg.get('ext_col_msku', cfg.get('col_sku', 150.0)))
+        col_rak_w  = float(cfg.get('ext_col_rak', 80.0))
+        col_qty_w  = float(cfg.get('ext_col_qty', 50.0))
+        col_msku_w = float(cfg.get('ext_col_msku', 150.0))
         col_widths = [col_rak_w, col_msku_w, col_qty_w]
 
     border = float(cfg.get('border_thickness', 0.5))
@@ -5408,17 +5408,17 @@ def calc_items_for_rows_bundling_pro(items, rak_map, available_height, label_cfg
     from reportlab.platypus import Paragraph
     from reportlab.lib.styles import ParagraphStyle
 
-    cfg = {**(label_cfg or {}), **(bundling_2_cfg or {})}
+    cfg = label_cfg or {}
 
-    ext_f_rak  = float(cfg.get('ext_font_rak', cfg.get('font_rak', 10.5)))
-    ext_f_msku = float(cfg.get('ext_font_msku', cfg.get('font_sku', 10.5)))
-    ext_f_qty  = float(cfg.get('ext_font_qty', cfg.get('font_qty', 13.5)))
+    ext_f_rak  = float(cfg.get('ext_font_rak') or cfg.get('ext_font_size', 10.5))
+    ext_f_msku = float(cfg.get('ext_font_msku') or cfg.get('ext_font_size', 10.5))
+    ext_f_qty  = float(cfg.get('ext_font_qty') or cfg.get('ext_font_size', 13.5))
     ext_max_f  = max(ext_f_rak, ext_f_msku, ext_f_qty)
     row_h      = max(float(cfg.get('ext_row_height', 25.0)), ext_max_f * 2.25)
 
-    col_rak_w  = float(cfg.get('ext_col_rak', cfg.get('col_rak', 80.0)))
-    col_qty_w  = float(cfg.get('ext_col_qty', cfg.get('col_qty', 50.0)))
-    col_msku_w = float(cfg.get('ext_col_msku', cfg.get('col_sku', 150.0)))
+    col_rak_w  = float(cfg.get('ext_col_rak', 80.0))
+    col_qty_w  = float(cfg.get('ext_col_qty', 50.0))
+    col_msku_w = float(cfg.get('ext_col_msku', 150.0))
 
     fam        = cfg.get('ext_font_msku_family', 'Helvetica')
     is_bold    = cfg.get('ext_font_msku_bold', True)
@@ -6886,8 +6886,7 @@ async def process_labels(
         except:
             label_cfg = {}
 
-        if is_bundling_2 and bundling_2_cfg:
-            label_cfg = {**label_cfg, **bundling_2_cfg}
+        # Format Bundling Pro 1000% identik dengan Format Rak & ID menggunakan label_cfg utama
 
         try:
             bottom_priorities_res = await supabase_fetch("GET", "label_bottom_priorities")
@@ -7455,7 +7454,7 @@ async def process_labels(
                         recap_dict[msku] = recap_dict.get(msku, 0) + qty
             
             # Tentukan row height sebenarnya dari config
-            if is_extended:
+            if is_extended or is_bundling_2:
                 _ext_max_f = max(
                     float(label_cfg.get('ext_font_rak') or label_cfg.get('ext_font_size', 8)),
                     float(label_cfg.get('ext_font_msku') or label_cfg.get('ext_font_size', 8)),
@@ -8265,8 +8264,7 @@ async def process_labels_with_stats(
         except:
             label_cfg = {}
 
-        if is_bundling_2 and bundling_2_cfg:
-            label_cfg = {**label_cfg, **bundling_2_cfg}
+        # Format Bundling Pro 1000% identik dengan Format Rak & ID menggunakan label_cfg utama
 
         try:
             bottom_priorities_res = await supabase_fetch("GET", "label_bottom_priorities")
@@ -8834,7 +8832,7 @@ async def process_labels_with_stats(
                         recap_dict[msku] = recap_dict.get(msku, 0) + qty
             
             # Tentukan row height sebenarnya dari config
-            if is_extended:
+            if is_extended or is_bundling_2:
                 _ext_max_f = max(
                     float(label_cfg.get('ext_font_rak') or label_cfg.get('ext_font_size', 8)),
                     float(label_cfg.get('ext_font_msku') or label_cfg.get('ext_font_size', 8)),

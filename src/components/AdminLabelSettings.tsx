@@ -39,14 +39,14 @@ interface LabelConfig {
 const DEFAULTS: LabelConfig = {
     std_col_msku: 220, 
     std_col_qty: 50, 
-    std_font_msku: 8, 
+    std_font_msku: 11, 
     std_font_qty: 13.5, 
     std_row_height: 18,
     ext_col_rak: 80, 
     ext_col_msku: 150, 
     ext_col_qty: 50, 
-    ext_font_rak: 10, 
-    ext_font_msku: 8, 
+    ext_font_rak: 10.5, 
+    ext_font_msku: 10.5, 
     ext_font_qty: 13.5, 
     ext_row_height: 25,
     border_thickness: 0.5, 
@@ -57,10 +57,10 @@ const DEFAULTS: LabelConfig = {
     ext_font_rak_family: 'Bahnschrift',
     ext_font_msku_family: 'Helvetica',
     ext_font_qty_family: 'Bahnschrift',
-    std_font_msku_bold: false,
+    std_font_msku_bold: true,
     std_font_qty_bold: true,
-    ext_font_rak_bold: false,
-    ext_font_msku_bold: false,
+    ext_font_rak_bold: true,
+    ext_font_msku_bold: true,
     ext_font_qty_bold: true,
 };
 
@@ -113,17 +113,17 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
     }
 
     const BUNDLING_2_DEFAULTS: BundlingProConfig = {
-        col_rak: 75,
-        col_sku: 230,
-        col_qty: 40,
-        font_rak: 8.5,
-        font_sku: 8.5,
-        font_qty: 12,
-        font_header: 9,
+        col_rak: 80,
+        col_sku: 150,
+        col_qty: 50,
+        font_rak: 10.5,
+        font_sku: 10.5,
+        font_qty: 13.5,
+        font_header: 10,
         font_badge: 10.5,
         border_thickness: 0.5,
         highlight_qty_box: false,
-        enable_badge: true,
+        enable_badge: false,
         header_bg: '#ffffff',
         header_color: '#000000',
     };
@@ -1226,7 +1226,25 @@ const AdminLabelSettings: React.FC<AdminLabelSettingsProps> = ({ showToast }) =>
                                     try {
                                         await Promise.all([
                                             axios.post(`${API_CONFIG.BASE_URL}/settings/label-table-config`, cfg),
-                                            axios.post(`${API_CONFIG.BASE_URL}/settings/label-bundling-2-config`, b2Cfg),
+                                            axios.post(`${API_CONFIG.BASE_URL}/settings/label-bundling-2-config`, {
+                                                ...b2Cfg,
+                                                col_rak: cfg.ext_col_rak,
+                                                col_sku: cfg.ext_col_msku,
+                                                col_qty: cfg.ext_col_qty,
+                                                font_rak: cfg.ext_font_rak,
+                                                font_sku: cfg.ext_font_msku,
+                                                font_qty: cfg.ext_font_qty,
+                                                ext_col_rak: cfg.ext_col_rak,
+                                                ext_col_msku: cfg.ext_col_msku,
+                                                ext_col_qty: cfg.ext_col_qty,
+                                                ext_font_rak: cfg.ext_font_rak,
+                                                ext_font_msku: cfg.ext_font_msku,
+                                                ext_font_qty: cfg.ext_font_qty,
+                                                ext_row_height: cfg.ext_row_height,
+                                                border_thickness: cfg.border_thickness,
+                                                header_bg: cfg.header_bg,
+                                                header_color: cfg.header_color,
+                                            }),
                                         ]);
                                         showToast?.('Pengaturan Format Bundling Pro disimpan!');
                                     } catch (e: any) {
