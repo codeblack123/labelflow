@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiUser, FiLogOut, FiChevronDown, FiSettings } from 'react-icons/fi';
+import { User, LogOut, ChevronDown, Settings } from 'lucide-react';
 
 interface ProfilMenuProps {
     user: {
@@ -34,17 +34,18 @@ const ProfilMenu: React.FC<ProfilMenuProps> = ({ user, onLogout, onMenuSelect })
     return (
         <div className="relative z-50 ml-auto" ref={menuRef}>
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2.5 px-2 py-1 rounded-xl transition-colors hover:bg-slate-800/60"
+                className="flex items-center gap-2.5 pl-1.5 pr-2.5 h-11 rounded-full transition-colors hover:bg-white/5 cursor-pointer"
             >
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-md shadow-blue-600/30">
-                    <FiUser className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-md shadow-blue-600/30">
+                    <User size={18} aria-hidden="true" />
                 </div>
-                <div className="hidden md:flex flex-col items-start leading-none">
-                    <span className="text-xs font-bold text-white uppercase tracking-tight">{user.full_name || user.username}</span>
-                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">{user.role}</span>
+                <div className="hidden sm:block text-left leading-tight">
+                    <span className="block text-sm font-bold uppercase text-white tracking-tight">{user.full_name || user.username}</span>
+                    <span className="block text-[11px] text-slate-400 uppercase tracking-wide">{user.role}</span>
                 </div>
-                <FiChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
@@ -67,7 +68,7 @@ const ProfilMenu: React.FC<ProfilMenuProps> = ({ user, onLogout, onMenuSelect })
                             }}
                             className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
                         >
-                            <FiUser className="w-4 h-4 text-slate-400" />
+                            <User className="w-4 h-4 text-slate-400" />
                             Profil Saya
                         </button>
 
@@ -78,7 +79,7 @@ const ProfilMenu: React.FC<ProfilMenuProps> = ({ user, onLogout, onMenuSelect })
                             }}
                             className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
                         >
-                            <FiSettings className="w-4 h-4 text-slate-400" />
+                            <Settings className="w-4 h-4 text-slate-400" />
                             Pengaturan
                         </button>
                     </div>
@@ -91,7 +92,7 @@ const ProfilMenu: React.FC<ProfilMenuProps> = ({ user, onLogout, onMenuSelect })
                             }}
                             className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
                         >
-                            <FiLogOut className="w-4 h-4" />
+                            <LogOut className="w-4 h-4" />
                             Keluar
                         </button>
                     </div>

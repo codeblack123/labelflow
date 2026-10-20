@@ -22,6 +22,7 @@ import { saveFileToDB, getFileFromDB, deleteFileFromDB, saveProcessedItemsToLoca
 import { saveUploadTesToFirebase } from './utils/firebaseUpload';
 import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
+import { Activity, Building2, Bell as LucideBell } from 'lucide-react';
 import ProfilMenu from './components/ProfilMenu';
 import Profil from './components/Profil';
 import Settings from './components/Settings';
@@ -3804,11 +3805,23 @@ const App: React.FC = () => {
     }));
 
     if (viewState === 'landing') {
-        return <LandingPage onGetStarted={() => setViewState('login')} />;
+        return (
+            <LandingPage 
+                onLogin={() => setViewState('login')} 
+                onGetStarted={() => setViewState('login')} 
+                onSwitchView={(v) => setViewState(v)} 
+            />
+        );
     }
 
     if (viewState === 'login') {
-        return <LoginPage onLogin={handleLogin} onBack={() => setViewState('landing')} />;
+        return (
+            <LoginPage 
+                onLogin={handleLogin} 
+                onBack={() => setViewState('landing')} 
+                onSwitchView={(v) => setViewState(v)} 
+            />
+        );
     }
 
 
@@ -4073,8 +4086,8 @@ const App: React.FC = () => {
                 excelAwbs={unmatchedWarningData2?.excelAwbs || []}
                 pdfAwbs={unmatchedWarningData2?.pdfAwbs || []}
             />
-            <header className="sticky top-0 z-30 border-b border-slate-800/80 shadow-lg backdrop-blur-md bg-[#0b0f19]/95">
-                <div className="mx-auto px-4 sm:px-6 lg:px-8 min-h-[3.75rem] flex items-center justify-between gap-3 lg:gap-6 w-full max-w-full 2xl:max-w-[1720px]">
+            <header className="sticky top-0 z-30 border-b border-[#243252] shadow-lg backdrop-blur-md bg-[#0B1224] text-white">
+                <div className="mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] flex items-center justify-between gap-3 lg:gap-6 w-full max-w-full 2xl:max-w-[1720px]">
                     {/* Left: Logo + Gudang + DB Mode */}
                     <div className="flex items-center gap-2.5 sm:gap-4 flex-shrink-0">
                         {/* Logo/Title */}
@@ -4085,22 +4098,19 @@ const App: React.FC = () => {
                                 window.history.pushState({}, '', '?menu=dashboard');
                             }}
                         >
-                            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-blue-500/30 transition-transform hover:scale-105">
-                                <FiActivity className="w-5 h-5" />
-                            </div>
+                            <span className="w-10 h-10 rounded-[11px] bg-blue-700 grid place-items-center text-white shadow-md flex-shrink-0">
+                                <Activity size={22} aria-hidden="true" />
+                            </span>
                             <div className="hidden sm:block">
-                                <h1 className="text-sm lg:text-base font-bold text-white tracking-tight leading-none">Label Flow</h1>
-                                <p className="text-[10px] text-slate-400 font-normal leading-tight mt-1">Proses label otomatis</p>
+                                <h1 className="text-sm lg:text-base font-extrabold text-white tracking-tight leading-none">Label Flow</h1>
+                                <p className="text-[11px] text-slate-400 font-normal leading-tight mt-1">Proses label otomatis</p>
                             </div>
                         </div>
 
-                        {/* Vertical Divider */}
-                        <div className="hidden md:block h-6 w-px bg-slate-800 flex-shrink-0" />
-
                         {/* Active Warehouse Switcher / Badge */}
                         {accessibleWarehouses.length > 1 ? (
-                            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#131b2e] border border-blue-500/40 text-xs shadow-inner flex-shrink-0 hover:border-blue-400 transition-colors" title="Pilih Gudang Aktif">
-                                <span className="text-sm">🏢</span>
+                            <div className="hidden sm:flex items-center gap-2 h-10 px-3.5 rounded-[10px] border border-[#243252] bg-[#111B33] text-sm font-semibold shadow-inner flex-shrink-0 hover:border-blue-400 transition-colors" title="Pilih Gudang Aktif">
+                                <Building2 size={16} className="text-blue-300" aria-hidden="true" />
                                 <select
                                     value={activeWarehouseId || ''}
                                     onChange={(e) => handleSelectWarehouse(e.target.value)}
@@ -4114,35 +4124,41 @@ const App: React.FC = () => {
                                 </select>
                             </div>
                         ) : accessibleWarehouses.length === 1 ? (
-                            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#131b2e] border border-slate-800 text-xs font-bold text-blue-400 select-none shadow-inner flex-shrink-0" title="Gudang aktif untuk akun ini">
-                                <span>🏢</span>
+                            <div className="hidden sm:flex items-center gap-2 h-10 px-3.5 rounded-[10px] border border-[#243252] bg-[#111B33] text-sm font-semibold text-white select-none shadow-inner flex-shrink-0" title="Gudang aktif untuk akun ini">
+                                <Building2 size={16} className="text-blue-300" aria-hidden="true" />
                                 <span className="truncate max-w-[140px]">{accessibleWarehouses[0].name}</span>
                             </div>
                         ) : null}
 
                         {/* DB Mode Toggle (Desktop) */}
                         <div
-                            className="hidden md:flex items-center gap-1 p-1 rounded-xl bg-[#131b2e] border border-slate-800 cursor-pointer select-none flex-shrink-0"
+                            className="hidden md:flex items-center p-1 rounded-[10px] border border-[#243252] bg-[#111B33] cursor-pointer select-none flex-shrink-0"
                             onClick={() => handleDbSwitchClick(dbMode === 'cloud' ? 'local' : 'cloud')}
                             title={dbMode === 'cloud' ? "Mode Cloud: Cek Supabase (Prioritas) -> Local" : "Mode Local: Cek Local DB Saja"}
                         >
-                            <div className={`px-2.5 py-1 rounded-lg text-[10px] xl:text-[11px] font-bold uppercase transition-all duration-200 flex items-center gap-1 ${
-                                dbMode === 'cloud' ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30' : 'text-slate-400 hover:text-slate-200'
-                            }`}>
+                            <button
+                                type="button"
+                                className={`h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+                                    dbMode === 'cloud' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'
+                                }`}
+                            >
                                 Cloud
-                            </div>
-                            <div className={`px-2.5 py-1 rounded-lg text-[10px] xl:text-[11px] font-bold uppercase transition-all duration-200 flex items-center gap-1 ${
-                                dbMode === 'local' ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/30' : 'text-slate-400 hover:text-slate-200'
-                            }`}>
+                            </button>
+                            <button
+                                type="button"
+                                className={`h-8 px-3 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+                                    dbMode === 'local' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-300 hover:text-white'
+                                }`}
+                            >
                                 Local
-                            </div>
+                            </button>
                         </div>
                     </div>
 
                     {/* Right: Desktop Navigation + Notification + Profile */}
                     <div className="hidden lg:flex items-center gap-3 xl:gap-5 flex-nowrap min-w-0">
                         {/* Nav links */}
-                        <nav className="flex items-center gap-1 xl:gap-2.5 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                        <nav aria-label="Menu utama" className="flex items-center gap-1 xl:gap-2 flex-nowrap overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] py-1">
                             {menuOrder.filter(menuId => {
                                 if (menuId === 'bulkUploadQueue') return devMode;
                                 if (hiddenMenus.includes(menuId)) return false;
@@ -4163,17 +4179,13 @@ const App: React.FC = () => {
                                             if (menuId === 'history') setHistoryKey(prev => prev + 1); 
                                             window.history.pushState({}, '', `?menu=${menuId}`); 
                                         }}
-                                        className={`relative px-2.5 py-1.5 text-xs xl:text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 rounded-lg ${
+                                        className={`h-10 px-3.5 rounded-lg text-[14.5px] font-semibold transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                                             isActive 
-                                                ? 'text-white font-bold bg-white/10' 
-                                                : 'text-slate-300 hover:text-white hover:bg-white/5 font-medium'
+                                                ? 'bg-white/10 text-white shadow-[inset_0_-2px_0_#3B82F6]' 
+                                                : 'text-slate-300 hover:text-white hover:bg-white/5'
                                         }`}
                                     >
-                                        {menuId === 'dashboard' && <FiActivity className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
                                         <span>{def.label}</span>
-                                        {isActive && (
-                                            <span className="absolute -bottom-1 left-2.5 right-2.5 h-[2.5px] bg-blue-500 rounded-full shadow-sm shadow-blue-500/50" />
-                                        )}
                                     </a>
                                 );
                             })}
@@ -4182,9 +4194,14 @@ const App: React.FC = () => {
                         {/* Right notification bell + User Profile */}
                         <div className="flex items-center gap-2 pl-3 border-l border-slate-800 flex-shrink-0">
                             {/* Notification Bell */}
-                            <button className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors flex-shrink-0">
-                                <FiBell className="w-4 h-4" />
-                                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#0b0f19]" />
+                            <button
+                                type="button"
+                                aria-label="Notifikasi"
+                                onClick={() => {}}
+                                className="relative w-11 h-11 grid place-items-center rounded-full text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex-shrink-0"
+                            >
+                                <LucideBell size={20} aria-hidden="true" />
+                                <span className="absolute top-2.5 right-3 w-2 h-2 rounded-full bg-red-500 ring-2 ring-[#0B1224]" />
                             </button>
 
                             {/* User Profile Menu */}
@@ -4401,7 +4418,7 @@ const App: React.FC = () => {
             <main className={`mx-auto px-4 py-4 md:py-8 transition-all duration-300 ${['admin', 'toolkit', 'dashboard', 'upload', 'upload2', 'uploadTest', 'uploadTestMsku', 'uploadFlex', 'history', 'bulkUpload', 'bulkUploadTest', 'bulkUploadTes', 'bulkUploadTestMsku', 'bulkUploadPro', 'bulkUploadQueue'].includes(activeMenu) ? 'max-w-7xl' : 'max-w-3xl'
                 }`}>
                 {activeMenu === 'dashboard' ? (
-                    <Dashboard user={user} />
+                    <Dashboard user={user} onSwitchView={(v) => setViewState(v)} />
                 ) : activeMenu === 'uploadFlex' ? (
                     <div className="space-y-8 animate-in fade-in duration-300">
                         {/* Header Section */}
