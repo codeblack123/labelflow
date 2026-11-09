@@ -190,6 +190,21 @@ export const deleteHistoryFromLocal = async (id: number | string): Promise<void>
     });
 };
 
+export const getHistoryFromLocal = async (): Promise<any[]> => {
+    try {
+        const db = await initDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([HISTORY_STORE], 'readonly');
+            const store = transaction.objectStore(HISTORY_STORE);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject('Error getting history locally');
+        });
+    } catch {
+        return [];
+    }
+};
+
 export const deleteProcessedItemsByExcelFile = async (filename: string): Promise<void> => {
     if (!filename) return;
     const db = await initDB();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSettings, FiLock, FiUnlock, FiX, FiDatabase, FiLayers, FiTrendingDown, FiTrash2, FiBell, FiUser, FiUsers, FiPackage, FiLayout, FiMessageSquare, FiTerminal, FiWifi, FiCheckCircle, FiUploadCloud } from 'react-icons/fi';
+import { FiSettings, FiLock, FiUnlock, FiX, FiDatabase, FiLayers, FiTrendingDown, FiTrash2, FiBell, FiUser, FiUsers, FiPackage, FiLayout, FiMessageSquare, FiTerminal, FiWifi, FiCheckCircle, FiUploadCloud, FiCopy } from 'react-icons/fi';
 import axios from 'axios';
 import { API_CONFIG } from '../constants';
 import { supabase } from '../supabaseClient';
@@ -28,13 +28,14 @@ import AdminTableCleaner from './AdminTableCleaner';
 import AdminFeatureAudit from './AdminFeatureAudit';
 import AdminStaffManager from './AdminStaffManager';
 import AdminSkuBundling from './AdminSkuBundling';
+import AdminPdfHistoryExtractor from './AdminPdfHistoryExtractor';
 interface AdminProps {
     showToast?: (message: string) => void;
     user?: { role: string; username: string; assigned_warehouses?: string[] } | null;
     onMenuSettingsChanged?: (menuOrder: string[], hiddenMenus: string[], skipPinMenus?: string[]) => void;
 }
 
-type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip10k' | 'skuVip20k' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate' | 'staffManager' | 'skuBundling';
+type AdminView = 'database' | 'grouping' | 'priority' | 'labelPriority' | 'bulky' | 'formatting' | 'labelSettings' | 'dataManager' | 'toolkitAccess' | 'menuSettings' | 'notifications' | 'userManager' | 'barangKhusus' | 'runningText' | 'sqlEditor' | 'networkDiagnostics' | 'skuVip' | 'skuVip10k' | 'skuVip20k' | 'skuVip50k' | 'tableCleaner' | 'featureAudit' | 'systemUpdate' | 'staffManager' | 'skuBundling' | 'pdfHistoryExtractor';
 
 const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -92,6 +93,7 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
         {
             title: 'Manajemen Data',
             items: [
+                { id: 'pdfHistoryExtractor', label: 'Salin Data & PDF Riwayat', icon: FiCopy },
                 { id: 'sqlEditor', label: 'SQL Editor', icon: FiTerminal },
                 { id: 'staffManager', label: 'Manajemen Staf', icon: FiUsers },
                   { id: 'featureAudit', label: 'Audit & Register Fitur', icon: FiCheckCircle },
@@ -359,6 +361,9 @@ const Admin: React.FC<AdminProps> = ({ showToast, user, onMenuSettingsChanged })
                     </div>
                     <div className={activeView === 'menuSettings' ? 'block' : 'hidden'}>
                         <AdminMenuSettings onSettingsChanged={onMenuSettingsChanged} />
+                    </div>
+                    <div className={activeView === 'pdfHistoryExtractor' ? 'block' : 'hidden'}>
+                        <AdminPdfHistoryExtractor showToast={showToast} user={user} />
                     </div>
                     <div className={activeView === 'dataManager' ? 'block' : 'hidden'}>
                         <AdminDataManager showToast={showToast} user={user} />

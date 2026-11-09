@@ -36,6 +36,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
     const [activeTab, setActiveTab] = useState<'matched' | 'unmatched_excel' | 'unmatched_pdf'>('matched');
     const [showMatchedModal, setShowMatchedModal] = useState(false);
     const [isCopiedModalData, setIsCopiedModalData] = useState(false);
+    const [isCopiedPdfModalData, setIsCopiedPdfModalData] = useState(false);
+    const [quickCardToast, setQuickCardToast] = useState<string | null>(null);
 
     // Filter & Pagination States
     const [searchQuery, setSearchQuery] = useState('');
@@ -287,97 +289,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
             const activeTenantId = user?.tenant_id || user?.username || 'unknown';
             
             try {
-                // ═══ FIRESTORE PATH (Cloud Mode) ═══
-                const dbMode = localStorage.getItem('db_mode') || 'cloud';
-                if (dbMode === 'cloud') {
-                    try {
-                        const { collection, query: fsQuery, orderBy, getDocs, where, Timestamp } = await import('firebase/firestore');
-                        const { db } = await import('../firebaseClient');
-
-                        // NO orderBy or multiple where fields to avoid requiring Firestore composite indexes
-                        let constraints: any[] = [];
-
-                        // Filter by tenant_id (Data Isolation)
-                        console.log('[RIWAYAT DEBUG] user object:', JSON.stringify({ username: user?.username, role: user?.role, tenant_id: user?.tenant_id, parent_account: user?.parent_account }));
-                        console.log('[RIWAYAT DEBUG] Using activeTenantId for query:', activeTenantId);
-                        constraints.push(where('tenant_id', '==', activeTenantId));
-
-                        const q = fsQuery(collection(db, 'upload_tes_history'), ...constraints);
-                        const snapshot = await getDocs(q);
-                        console.log('[RIWAYAT DEBUG] Firestore returned', snapshot.size, 'documents');
-
-                        if (cancelled) return;
-
-                        let records: HistoryRecord[] = snapshot.docs.map(doc => {
-                            const d = doc.data();
-                            const createdAt = d.created_at?.toDate ? d.created_at.toDate().toISOString() : (d.created_at || new Date().toISOString());
-                            return {
-                                id: doc.id,
-                                created_at: createdAt,
-                                excel_filename: d.excel_filename || '',
-                                pdf_filenames: d.pdf_filenames || [],
-                                total_excel_awb: d.stats?.total_excel_awb || 0,
-                                matched_count: d.stats?.matched_count || 0,
-                                unmatched_excel_count: d.stats?.unmatched_excel_count || 0,
-                                unmatched_pdf_count: d.stats?.unmatched_pdf_count || 0,
-                                matched_awbs: d.stats?.matched_awbs || [],
-                                unmatched_excel_awbs: d.stats?.unmatched_excel_awbs || [],
-                                unmatched_pdf_awbs: d.stats?.unmatched_pdf_awbs || [],
-                                username: d.picker_name || '',
-                            };
-                        });
-
-                        // 1. Sort by created_at DESC (Client-side)
-                        records.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-                        // 2. Client-side date filter (WIB UTC+7 boundary approximation)
-                        if (selectedDate) {
-                            const [yyyy, mm, dd] = selectedDate.split('-').map(Number);
-                            const startLocal = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0).getTime();
-                            const endLocal = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999).getTime();
-                            records = records.filter(r => {
-                                const time = new Date(r.created_at).getTime();
-                                return time >= startLocal && time <= endLocal;
-                            });
-                        }
-
-                        // Client-side search filter
-                        if (debouncedQuery && debouncedQuery.trim()) {
-                            const term = debouncedQuery.trim().toLowerCase();
-                            records = records.filter(r => {
-                                const matchText = (text: string) =>
-                                    exactMatch ? text.toLowerCase() === term : text.toLowerCase().includes(term);
-                                if ((searchCategory === 'all' || searchCategory === 'excel') && r.excel_filename && matchText(r.excel_filename)) return true;
-                                if ((searchCategory === 'all' || searchCategory === 'pdf') && r.pdf_filenames?.some(p => matchText(p))) return true;
-                                if ((searchCategory === 'all' || searchCategory === 'awb') && r.matched_awbs?.some((a: any) => {
-                                    const aStr = typeof a === 'object' && a !== null ? `${a.id_pesanan || ''} ${a.awb || ''}` : String(a);
-                                    return matchText(aStr);
-                                })) return true;
-                                return false;
-                            });
-                        }
-
-                        // Unmatched filter
-                        if (hasUnmatched) {
-                            records = records.filter(r => r.unmatched_excel_count > 0 || r.unmatched_pdf_count > 0);
-                        }
-
-                        const totalCount = records.length;
-                        const from = (currentPage - 1) * rowsPerPage;
-                        const paged = records.slice(from, from + rowsPerPage);
-
-                        setHistory(paged);
-                        setTotalRecords(totalCount);
-                        setLoading(false);
-                        return; // Done — skip Supabase path
-                    } catch (firestoreErr: any) {
-                        console.warn('[FIRESTORE] Fetch failed, falling back to Supabase:', firestoreErr.message);
-                        const { supabase } = await import('../supabaseClient');
-                    }
-                }
-
-                // ═══ SUPABASE PATH (Local/Fallback) ═══
-                // STRATEGY 1: Fast RPC search (skip when date/unmatched filter active or multi-search)
+                // ═══ SUPABASE PATH (Primary Source of Truth) ═══
+                // Fast RPC search (skip when date/unmatched filter active or multi-search)
                 if (debouncedQuery && debouncedQuery.length > 2
                     && !selectedDate
                     && !hasUnmatched
@@ -395,11 +308,22 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                     }
                 }
 
-                // STRATEGY 2: Standard Supabase query
+                // Standard Supabase query
                 let query = supabase
                     .from('label_process_history')
-                    .select('*', { count: 'exact' })
-                    .eq('tenant_id', activeTenantId);
+                    .select('*', { count: 'exact' });
+
+                // Multi-Tenant Isolation
+                const isDev = user?.role === 'developer' || user?.username === 'developer';
+                if (!isDev) {
+                    if (activeTenantId === 'kalindojkt' || user?.parent_account === 'kalindojkt' || user?.username === 'kalindojkt') {
+                        query = query.in('tenant_id', ['kalindojkt', 'ainul@labelflow.com']);
+                    } else if (activeTenantId === 'kalindosby' || user?.parent_account === 'kalindosby' || user?.username === 'kalindosby') {
+                        query = query.eq('tenant_id', 'kalindosby');
+                    } else if (activeTenantId && activeTenantId !== 'unknown') {
+                        query = query.eq('tenant_id', activeTenantId);
+                    }
+                }
 
                 // Date filter — WIB (UTC+7)
                 if (selectedDate) {
@@ -496,9 +420,22 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
 
                 setHistory(filteredData);
                 setTotalRecords(filteredCount);
-            } catch (err) {
+                return;
+            } catch (err: any) {
+                console.warn('[OrderHistory] Supabase fetch failed, trying local DB fallback:', err);
+                try {
+                    const { getHistoryFromLocal } = await import('../utils/db');
+                    const localData = await getHistoryFromLocal();
+                    if (!cancelled && localData && localData.length > 0) {
+                        setHistory(localData.slice(0, rowsPerPage));
+                        setTotalRecords(localData.length);
+                        return;
+                    }
+                } catch (localErr) {
+                    console.error('Local fallback error:', localErr);
+                }
+
                 if (!cancelled) {
-                    console.error('Error fetching history:', err);
                     setHistory([]);
                     setTotalRecords(0);
                 }
@@ -508,8 +445,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
         };
 
         doFetch();
-        return () => { cancelled = true; }; // cleanup: cancel on unmount or dep change
-    }, [currentPage, selectedDate, debouncedQuery, searchCategory, exactMatch, hasUnmatched, refreshTrigger, rowsPerPage, isMultiSearch]);
+        return () => { cancelled = true; };
+    }, [currentPage, selectedDate, debouncedQuery, searchCategory, exactMatch, hasUnmatched, refreshTrigger, rowsPerPage, isMultiSearch, user?.tenant_id, user?.username, user?.role]);
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleString('id-ID', {
@@ -787,6 +724,9 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                     <div className="flex items-center gap-3">
                                         <button
                                             onClick={() => {
+                                                const pdfDefaultName = (selectedRecord.pdf_filenames && selectedRecord.pdf_filenames.length > 0)
+                                                    ? selectedRecord.pdf_filenames.join(', ')
+                                                    : '-';
                                                 const text = selectedRecord.matched_awbs?.map((item: any) => {
                                                     let parsed = item;
                                                     if (typeof item === 'string' && item.startsWith('{')) {
@@ -795,7 +735,10 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                                     const isObj = typeof parsed === 'object' && parsed !== null;
                                                     const awb = isObj ? parsed.awb : parsed;
                                                     const id_pesanan = isObj ? parsed.id_pesanan : '-';
-                                                    return `${id_pesanan}\t${awb}`;
+                                                    const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                        ? (parsed.pdf_name || parsed.pdf_filename)
+                                                        : pdfDefaultName;
+                                                    return `${id_pesanan}\t${awb}\t${pdfName}`;
                                                 }).join('\n') || '';
                                                 navigator.clipboard.writeText(text);
                                                 setIsCopiedModalData(true);
@@ -819,6 +762,26 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                                 </>
                                             )}
                                         </button>
+                                        <button
+                                            onClick={() => {
+                                                const pdfList = selectedRecord.pdf_filenames || [];
+                                                if (pdfList.length === 0) {
+                                                    alert('Tidak ada nama file PDF pada proses ini.');
+                                                    return;
+                                                }
+                                                navigator.clipboard.writeText(pdfList.join('\n'));
+                                                setIsCopiedPdfModalData(true);
+                                                setTimeout(() => setIsCopiedPdfModalData(false), 2000);
+                                            }}
+                                            className={`px-3.5 py-2 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${isCopiedPdfModalData ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                        >
+                                            <FaFilePdf className="w-4 h-4" />
+                                            <span>
+                                                {isCopiedPdfModalData
+                                                    ? 'Nama PDF Disalin!'
+                                                    : `Copy Nama PDF (${selectedRecord.pdf_filenames?.length || 0})`}
+                                            </span>
+                                        </button>
                                         <button onClick={() => setShowMatchedModal(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -831,7 +794,8 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                         <thead>
                                             <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                 <th className="p-3 rounded-tl-xl">ID Pesanan</th>
-                                                <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                                <th className="p-3">AWB / Resi</th>
+                                                <th className="p-3 rounded-tr-xl">Nama File PDF</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -843,10 +807,14 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                                 const isObj = typeof parsed === 'object' && parsed !== null;
                                                 const awbStr = isObj ? parsed.awb : parsed;
                                                 const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                    ? (parsed.pdf_name || parsed.pdf_filename)
+                                                    : ((selectedRecord.pdf_filenames && selectedRecord.pdf_filenames.length > 0) ? selectedRecord.pdf_filenames.join(', ') : '-');
                                                 return (
                                                     <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
                                                         <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
-                                                        <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                        <td className="p-3 font-mono text-sm text-gray-500">{awbStr}</td>
+                                                        <td className="p-3 font-mono text-sm text-indigo-600 font-medium border-r border-gray-100 truncate max-w-xs" title={pdfName}>{pdfName}</td>
                                                     </tr>
                                                 );
                                             })}
@@ -1230,6 +1198,13 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                 </div>
             </div>
 
+            {quickCardToast && (
+                <div className="fixed bottom-6 right-6 z-[99999] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-2">
+                    <FiCheckCircle className="w-4 h-4 text-emerald-400" />
+                    <span>{quickCardToast}</span>
+                </div>
+            )}
+
             {/* List / Cards Container */}
             <div className="bg-white rounded-3xl border border-slate-200/80 shadow-lg p-6">
                 {loading ? (
@@ -1284,7 +1259,39 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 self-end md:self-center flex-shrink-0">
+                                <div className="flex items-center gap-2 self-end md:self-center flex-shrink-0 flex-wrap">
+                                    {/* Quick Actions per Card */}
+                                    {record.pdf_filenames && record.pdf_filenames.length > 0 && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigator.clipboard.writeText(record.pdf_filenames.join('\n'));
+                                                setQuickCardToast(`✓ ${record.pdf_filenames.length} nama file PDF berhasil disalin`);
+                                                setTimeout(() => setQuickCardToast(null), 2500);
+                                            }}
+                                            title="Salin semua nama file PDF di proses ini"
+                                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-xl text-xs font-bold transition-all border border-blue-200 shadow-xs flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <FaFilePdf className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Salin PDF</span>
+                                        </button>
+                                    )}
+
+                                    {record.matched_awbs && record.matched_awbs.length > 0 && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedRecord(record);
+                                                setShowMatchedModal(true);
+                                            }}
+                                            title="Lihat & Salin Data Resi/Pesanan Berhasil Diproses"
+                                            className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white rounded-xl text-xs font-bold transition-all border border-emerald-200 shadow-xs flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <FiClipboard className="w-3.5 h-3.5" />
+                                            <span className="hidden sm:inline">Data Resi ({record.matched_awbs.length})</span>
+                                        </button>
+                                    )}
+
                                     <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-xs">
                                         {record.matched_count} Match
                                     </span>

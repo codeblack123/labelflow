@@ -5549,10 +5549,21 @@ const App: React.FC = () => {
                             <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowMatchedModalTest(false)}>
                                 <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
                                     <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                        <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                        <div className="flex items-center gap-2.5">
+                                            <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                            {activeWarehouseId && (
+                                                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                                    <span>🏢</span>
+                                                    <span>{warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang'}</span>
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-3">
                                             <button
                                                 onClick={() => {
+                                                    const pdfDefaultName = (testProcessStats.pdf_filenames && testProcessStats.pdf_filenames.length > 0)
+                                                        ? testProcessStats.pdf_filenames.join(', ')
+                                                        : (testPdfFiles.length > 0 ? testPdfFiles.map(f => f.name).join(', ') : '-');
                                                     const text = testProcessStats.matched_with_awb?.map((item: any) => {
                                                         let parsed = item;
                                                         if (typeof item === 'string' && item.startsWith('{')) {
@@ -5561,7 +5572,10 @@ const App: React.FC = () => {
                                                         const isObj = typeof parsed === 'object' && parsed !== null;
                                                         const awb = isObj ? parsed.awb : parsed;
                                                         const id_pesanan = isObj ? parsed.id_pesanan : '-';
-                                                        return `${id_pesanan}\t${awb}`;
+                                                        const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                            ? (parsed.pdf_name || parsed.pdf_filename)
+                                                            : pdfDefaultName;
+                                                        return `${id_pesanan}\t${awb}\t${pdfName}`;
                                                     }).join('\n') || '';
                                                     navigator.clipboard.writeText(text);
                                                     showToast('Berhasil disalin ke clipboard');
@@ -5572,6 +5586,23 @@ const App: React.FC = () => {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                                                 </svg>
                                                 Copy Data
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const pdfNames = testProcessStats.pdf_filenames || testPdfFiles.map(f => f.name);
+                                                    if (!pdfNames || pdfNames.length === 0) {
+                                                        showToast('⚠️ Tidak ada file PDF pada proses ini');
+                                                        return;
+                                                    }
+                                                    navigator.clipboard.writeText(pdfNames.join('\n'));
+                                                    showToast(`✓ ${pdfNames.length} nama file PDF berhasil disalin`);
+                                                }}
+                                                className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                Copy Nama PDF ({testProcessStats.pdf_filenames?.length || testPdfFiles.length})
                                             </button>
                                             <button onClick={() => setShowMatchedModalTest(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -5585,7 +5616,8 @@ const App: React.FC = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                     <th className="p-3 rounded-tl-xl">ID Pesanan</th>
-                                                    <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                                    <th className="p-3">AWB / Resi</th>
+                                                    <th className="p-3 rounded-tr-xl">Nama File PDF</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -5597,10 +5629,14 @@ const App: React.FC = () => {
                                                     const isObj = typeof parsed === 'object' && parsed !== null;
                                                     const awbStr = isObj ? parsed.awb : parsed;
                                                     const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                    const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                        ? (parsed.pdf_name || parsed.pdf_filename)
+                                                        : ((testProcessStats.pdf_filenames && testProcessStats.pdf_filenames.length > 0) ? testProcessStats.pdf_filenames.join(', ') : (testPdfFiles.length > 0 ? testPdfFiles.map(f => f.name).join(', ') : '-'));
                                                     return (
                                                         <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
                                                             <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
-                                                            <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                            <td className="p-3 font-mono text-sm text-gray-500">{awbStr}</td>
+                                                            <td className="p-3 font-mono text-sm text-indigo-600 font-medium border-r border-gray-100 truncate max-w-xs" title={pdfName}>{pdfName}</td>
                                                         </tr>
                                                     );
                                                 })}
@@ -5923,10 +5959,21 @@ const App: React.FC = () => {
                                 <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowMatchedModal2(false)}>
                                     <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
                                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                            <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                            <div className="flex items-center gap-2.5">
+                                                <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                                {activeWarehouseId && (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                                        <span>🏢</span>
+                                                        <span>{warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang'}</span>
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-3">
                                                 <button
                                                     onClick={() => {
+                                                        const pdfDefaultName = (processStats2.pdf_filenames && processStats2.pdf_filenames.length > 0)
+                                                            ? processStats2.pdf_filenames.join(', ')
+                                                            : (pdfFiles2.length > 0 ? pdfFiles2.map(f => f.name).join(', ') : '-');
                                                         const text = processStats2.matched_with_awb?.map((item: any) => {
                                                         let parsed = item;
                                                         if (typeof item === 'string' && item.startsWith('{')) {
@@ -5935,7 +5982,10 @@ const App: React.FC = () => {
                                                         const isObj = typeof parsed === 'object' && parsed !== null;
                                                         const awb = isObj ? parsed.awb : parsed;
                                                         const id_pesanan = isObj ? parsed.id_pesanan : '-';
-                                                        return `${id_pesanan}\t${awb}`;
+                                                        const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                            ? (parsed.pdf_name || parsed.pdf_filename)
+                                                            : pdfDefaultName;
+                                                        return `${id_pesanan}\t${awb}\t${pdfName}`;
                                                     }).join('\n') || '';
                                                         navigator.clipboard.writeText(text);
                                                         setIsCopiedModalData(true);
@@ -5960,6 +6010,23 @@ const App: React.FC = () => {
                                                         </>
                                                     )}
                                                 </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const pdfNames = processStats2.pdf_filenames || pdfFiles2.map(f => f.name);
+                                                        if (!pdfNames || pdfNames.length === 0) {
+                                                            showToast('⚠️ Tidak ada file PDF pada proses ini');
+                                                            return;
+                                                        }
+                                                        navigator.clipboard.writeText(pdfNames.join('\n'));
+                                                        showToast(`✓ ${pdfNames.length} nama file PDF berhasil disalin`);
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl font-bold text-sm transition-colors flex items-center gap-2"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                    </svg>
+                                                    Copy Nama PDF ({processStats2.pdf_filenames?.length || pdfFiles2.length})
+                                                </button>
                                                 <button onClick={() => setShowMatchedModal2(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                                                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -5968,17 +6035,27 @@ const App: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="p-6 overflow-y-auto bg-gray-50/30">
-                                            <div className="grid grid-cols-2 gap-4 mb-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="grid grid-cols-3 gap-4 mb-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                 <div>AWB / Resi</div>
                                                 <div>ID Pesanan</div>
+                                                <div>Nama File PDF</div>
                                             </div>
                                             <div className="space-y-1">
-                                                {processStats2.matched_with_awb.map((item, i) => (
-                                                    <div key={i} className="grid grid-cols-2 gap-4 p-3 bg-white rounded-xl border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all text-sm font-mono">
-                                                        <div className="text-gray-600">{item.awb || '-'}</div>
-                                                        <div className="text-gray-900 font-bold">{item.id_pesanan || '-'}</div>
-                                                    </div>
-                                                ))}
+                                                {processStats2.matched_with_awb.map((item, i) => {
+                                                    const isObj = typeof item === 'object' && item !== null;
+                                                    const awb = isObj ? item.awb : item;
+                                                    const id_pesanan = isObj ? item.id_pesanan : '-';
+                                                    const pdfName = (isObj && ((item as any).pdf_name || (item as any).pdf_filename))
+                                                        ? ((item as any).pdf_name || (item as any).pdf_filename)
+                                                        : ((processStats2.pdf_filenames && processStats2.pdf_filenames.length > 0) ? processStats2.pdf_filenames.join(', ') : (pdfFiles2.length > 0 ? pdfFiles2.map(f => f.name).join(', ') : '-'));
+                                                    return (
+                                                        <div key={i} className="grid grid-cols-3 gap-4 p-3 bg-white rounded-xl border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all text-sm font-mono">
+                                                            <div className="text-gray-600 truncate">{awb || '-'}</div>
+                                                            <div className="text-gray-900 font-bold truncate">{id_pesanan || '-'}</div>
+                                                            <div className="text-indigo-600 font-semibold truncate" title={pdfName}>{pdfName}</div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     </div>
@@ -7083,10 +7160,21 @@ const App: React.FC = () => {
                             <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowMatchedModalBulk(false)}>
                                 <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
                                     <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                        <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                        <div className="flex items-center gap-2.5">
+                                            <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                            {activeWarehouseId && (
+                                                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                                    <span>🏢</span>
+                                                    <span>{warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang'}</span>
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-3">
                                             <button
                                                 onClick={() => {
+                                                    const pdfDefaultName = (bulkStats.pdf_filenames && bulkStats.pdf_filenames.length > 0)
+                                                        ? bulkStats.pdf_filenames.join(', ')
+                                                        : (bulkPdfFiles.length > 0 ? bulkPdfFiles.map(f => f.name).join(', ') : '-');
                                                     const text = bulkStats.matched_with_awb?.map((item: any) => {
                                                         let parsed = item;
                                                         if (typeof item === 'string' && item.startsWith('{')) {
@@ -7095,7 +7183,10 @@ const App: React.FC = () => {
                                                         const isObj = typeof parsed === 'object' && parsed !== null;
                                                         const awb = isObj ? parsed.awb : parsed;
                                                         const id_pesanan = isObj ? parsed.id_pesanan : '-';
-                                                        return `${id_pesanan}\t${awb}`;
+                                                        const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                            ? (parsed.pdf_name || parsed.pdf_filename)
+                                                            : pdfDefaultName;
+                                                        return `${id_pesanan}\t${awb}\t${pdfName}`;
                                                     }).join('\n') || '';
                                                     navigator.clipboard.writeText(text);
                                                     showToast('Berhasil disalin ke clipboard');
@@ -7106,6 +7197,23 @@ const App: React.FC = () => {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                                                 </svg>
                                                 Copy Data
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const pdfNames = bulkStats.pdf_filenames || bulkPdfFiles.map(f => f.name);
+                                                    if (!pdfNames || pdfNames.length === 0) {
+                                                        showToast('⚠️ Tidak ada file PDF pada proses ini');
+                                                        return;
+                                                    }
+                                                    navigator.clipboard.writeText(pdfNames.join('\n'));
+                                                    showToast(`✓ ${pdfNames.length} nama file PDF berhasil disalin`);
+                                                }}
+                                                className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                Copy Nama PDF ({bulkStats.pdf_filenames?.length || bulkPdfFiles.length})
                                             </button>
                                             <button onClick={() => setShowMatchedModalBulk(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -7119,7 +7227,8 @@ const App: React.FC = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                     <th className="p-3 rounded-tl-xl">ID Pesanan</th>
-                                                    <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                                    <th className="p-3">AWB / Resi</th>
+                                                    <th className="p-3 rounded-tr-xl">Nama File PDF</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -7131,10 +7240,14 @@ const App: React.FC = () => {
                                                     const isObj = typeof parsed === 'object' && parsed !== null;
                                                     const awbStr = isObj ? parsed.awb : parsed;
                                                     const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                    const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                        ? (parsed.pdf_name || parsed.pdf_filename)
+                                                        : ((bulkStats.pdf_filenames && bulkStats.pdf_filenames.length > 0) ? bulkStats.pdf_filenames.join(', ') : (bulkPdfFiles.length > 0 ? bulkPdfFiles.map(f => f.name).join(', ') : '-'));
                                                     return (
                                                         <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
                                                             <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
-                                                            <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                            <td className="p-3 font-mono text-sm text-gray-500">{awbStr}</td>
+                                                            <td className="p-3 font-mono text-sm text-indigo-600 font-medium border-r border-gray-100 truncate max-w-xs" title={pdfName}>{pdfName}</td>
                                                         </tr>
                                                     );
                                                 })}
@@ -7563,10 +7676,21 @@ const App: React.FC = () => {
                             <div className="fixed top-0 left-0 right-0 bottom-0 w-screen h-screen bg-black/60 backdrop-blur-md z-[99999] flex items-center justify-center p-4" onClick={() => setShowMatchedModalBulkTest(false)}>
                                 <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
                                     <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                        <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                        <div className="flex items-center gap-2.5">
+                                            <h3 className="text-xl font-black text-gray-900">Data Berhasil Diproses</h3>
+                                            {activeWarehouseId && (
+                                                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                                    <span>🏢</span>
+                                                    <span>{warehouses.find(w => w.id === activeWarehouseId)?.name || 'Gudang'}</span>
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-3">
                                             <button
                                                 onClick={() => {
+                                                    const pdfDefaultName = (bulkTestStats.pdf_filenames && bulkTestStats.pdf_filenames.length > 0)
+                                                        ? bulkTestStats.pdf_filenames.join(', ')
+                                                        : (bulkTestPdfFiles.length > 0 ? bulkTestPdfFiles.map(f => f.name).join(', ') : '-');
                                                     const text = bulkTestStats.matched_with_awb?.map((item: any) => {
                                                         let parsed = item;
                                                         if (typeof item === 'string' && item.startsWith('{')) {
@@ -7575,7 +7699,10 @@ const App: React.FC = () => {
                                                         const isObj = typeof parsed === 'object' && parsed !== null;
                                                         const awb = isObj ? parsed.awb : parsed;
                                                         const id_pesanan = isObj ? parsed.id_pesanan : '-';
-                                                        return `${id_pesanan}\t${awb}`;
+                                                        const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                            ? (parsed.pdf_name || parsed.pdf_filename)
+                                                            : pdfDefaultName;
+                                                        return `${id_pesanan}\t${awb}\t${pdfName}`;
                                                     }).join('\n') || '';
                                                     navigator.clipboard.writeText(text);
                                                     showToast('Berhasil disalin ke clipboard');
@@ -7586,6 +7713,23 @@ const App: React.FC = () => {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                                                 </svg>
                                                 Copy Data
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const pdfNames = bulkTestStats.pdf_filenames || bulkTestPdfFiles.map(f => f.name);
+                                                    if (!pdfNames || pdfNames.length === 0) {
+                                                        showToast('⚠️ Tidak ada file PDF pada proses ini');
+                                                        return;
+                                                    }
+                                                    navigator.clipboard.writeText(pdfNames.join('\n'));
+                                                    showToast(`✓ ${pdfNames.length} nama file PDF berhasil disalin`);
+                                                }}
+                                                className="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                Copy Nama PDF ({bulkTestStats.pdf_filenames?.length || bulkTestPdfFiles.length})
                                             </button>
                                             <button onClick={() => setShowMatchedModalBulkTest(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -7599,7 +7743,8 @@ const App: React.FC = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                     <th className="p-3 rounded-tl-xl">ID Pesanan</th>
-                                                    <th className="p-3 rounded-tr-xl">AWB / Resi</th>
+                                                    <th className="p-3">AWB / Resi</th>
+                                                    <th className="p-3 rounded-tr-xl">Nama File PDF</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -7611,10 +7756,14 @@ const App: React.FC = () => {
                                                     const isObj = typeof parsed === 'object' && parsed !== null;
                                                     const awbStr = isObj ? parsed.awb : parsed;
                                                     const idPesanan = isObj ? parsed.id_pesanan : '-';
+                                                    const pdfName = (isObj && (parsed.pdf_name || parsed.pdf_filename))
+                                                        ? (parsed.pdf_name || parsed.pdf_filename)
+                                                        : ((bulkTestStats.pdf_filenames && bulkTestStats.pdf_filenames.length > 0) ? bulkTestStats.pdf_filenames.join(', ') : (bulkTestPdfFiles.length > 0 ? bulkTestPdfFiles.map(f => f.name).join(', ') : '-'));
                                                     return (
                                                         <tr key={idx} className="bg-white hover:bg-emerald-50 transition-colors">
                                                             <td className="p-3 font-mono text-sm text-gray-700 font-semibold border-l border-gray-100">{idPesanan}</td>
-                                                            <td className="p-3 font-mono text-sm text-gray-500 border-r border-gray-100">{awbStr}</td>
+                                                            <td className="p-3 font-mono text-sm text-gray-500">{awbStr}</td>
+                                                            <td className="p-3 font-mono text-sm text-indigo-600 font-medium border-r border-gray-100 truncate max-w-xs" title={pdfName}>{pdfName}</td>
                                                         </tr>
                                                     );
                                                 })}
